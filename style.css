@@ -111,7 +111,7 @@ body {
     font-weight: 600;
 }
 #donutChartContainer, #lineChartContainer {
-    /* position: relative; /* Often needed for Chart.js responsiveness */
+    position: relative; /* Often needed for Chart.js responsiveness */
     height: 200px; /* Or a bit more, e.g., 220px, adjust as needed */
     width: 100%;
 }
