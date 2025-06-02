@@ -14,7 +14,7 @@
     <header class="sathub-header p-4 shadow-md">
         <div class="container mx-auto flex flex-wrap items-center justify-between">
             <div class="flex items-center">
-                <img src="assets\logo.png" alt="The SAT Hub Logo" class="h-12 md:h-16 w-auto mr-2 md:mr-3 rounded-md"> 
+                <img src="YOUR_HOSTED_LOGO_URL_HERE" alt="The SAT Hub Logo" class="h-12 md:h-16 w-auto mr-2 md:mr-3 rounded-md"> 
                 <h1 class="sathub-header-title text-xl md:text-2xl font-bold">Analytics Hub</h1>
             </div>
             <div class="flex items-center space-x-4">
@@ -136,13 +136,17 @@
                 <p class="font-semibold">Question-wise Details:</p>
                 <div id="modalQuestionDetails" class="space-y-2 text-sm max-h-48 overflow-y-auto"></div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="modal-chart-container"> {/* Changed class */}
+                    <div class="modal-chart-wrapper"> {/* New Wrapper for sizing control */}
                         <p class="font-semibold text-center">Question Analysis (Sample)</p>
-                        <canvas id="modalDonutChart"></canvas> {/* Removed height attribute */}
+                        <div class="modal-chart-container">
+                             <canvas id="modalDonutChart"></canvas> {/* Height attribute removed */}
+                        </div>
                     </div>
-                    <div class="modal-chart-container"> {/* Changed class */}
+                    <div class="modal-chart-wrapper"> {/* New Wrapper for sizing control */}
                         <p class="font-semibold text-center">Your Score Trend (Sample)</p>
-                        <canvas id="modalLineChart"></canvas> {/* Removed height attribute */}
+                        <div class="modal-chart-container">
+                            <canvas id="modalLineChart"></canvas> {/* Height attribute removed */}
+                        </div>
                     </div>
                 </div>
             </div>
