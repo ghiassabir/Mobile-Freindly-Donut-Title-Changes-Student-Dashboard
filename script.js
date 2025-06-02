@@ -337,7 +337,7 @@ function openModal(title, contentDetails) {
     const donutCtx = document.getElementById('modalDonutChart')?.getContext('2d');
     if (donutCtx) { 
         console.log("Initializing Donut Chart in modal with data:", [cor, inc, un]);
-        modalDonutChartInstance=new Chart(donutCtx,{type:'doughnut',data:{labels:['Correct','Incorrect','Unanswered'],datasets:[{data:[cor,inc,un],backgroundColor:['#4caf50','#f44336','#9e9e9e'], hoverOffset: 4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{position:'bottom'}},cutout:'50%'}});
+        modalDonutChartInstance=new Chart(donutCtx,{type:'doughnut',data:{labels:['Correct','Incorrect','Unanswered'],datasets:[{data:[cor,inc,un],backgroundColor:['#4caf50','#f44336','#9e9e9e'], hoverOffset: 4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},cutout:'50%'}});
     } else {
         console.error("modalDonutChart canvas context not found!");
     }
