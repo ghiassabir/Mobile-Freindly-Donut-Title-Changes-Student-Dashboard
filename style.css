@@ -110,3 +110,13 @@ body {
     color: #ffd700;
     font-weight: 600;
 }
+#donutChartContainer, #lineChartContainer {
+    /* position: relative; /* Often needed for Chart.js responsiveness */
+    height: 200px; /* Or a bit more, e.g., 220px, adjust as needed */
+    width: 100%;
+}
+/* Ensure canvas fills its new container */
+#modalDonutChart, #modalLineChart {
+    max-height: 100%;
+    max-width: 100%;
+}
