@@ -1,14 +1,14 @@
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #f0f2f5; /* Light gray page background */
-    color: #333333; /* Default text color from Canvas sample */
+    background-color: #f0f2f5; 
+    color: #333333; 
 }
 .sathub-header {
-    background-color: #2a5266; /* SAT Hub: Main dark teal/blue */
-    color: #f0f0f0; /* SAT Hub: Light gray/off-white for secondary text */
+    background-color: #2a5266; 
+    color: #f0f0f0; 
 }
 .sathub-header-title {
-    color: #ffd700; /* SAT Hub: Gold/yellow for main title */
+    color: #ffd700; 
 }
 
 .sathub-accent-text { 
@@ -51,9 +51,9 @@ body {
     background-color: #ffffff;
     border-radius: 0.5rem; 
     box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); 
-    border: 1px solid #28a745; /* Green border */
+    border: 1px solid #28a745; 
     border-left-width: 8px; 
-    border-left-color: #ffd700; /* Yellow left border */
+    border-left-color: #ffd700; 
     overflow: hidden; 
     margin-bottom: 1.5rem; 
 }
@@ -102,21 +102,30 @@ body {
 .modal-body-content { padding: 1.25rem; }
 .close-button { color: #ffd700; float: right; font-size: 28px; font-weight: bold; position: absolute; top: 0.5rem; right: 1rem; }
 .close-button:hover, .close-button:focus { color: #ffffff; text-decoration: none; cursor: pointer; }
-.chart-container canvas { max-height: 280px; }
 
-/* Mobile Navigation Specific Styles */
+.chart-container canvas { 
+    max-height: 280px; 
+}
+
+/* New styles for modal chart containers */
+.modal-chart-wrapper {
+    display: flex;
+    flex-direction: column;
+    /* This wrapper will hold the title and the chart-container */
+}
+.modal-chart-container {
+    position: relative; /* Important for Chart.js responsiveness */
+    flex-grow: 1; /* Allow it to take available space in flex column */
+    height: 200px; /* Fixed height for consistency, adjust as needed */
+    width: 100%;   /* Take full width of its grid cell */
+}
+#modalDonutChart, #modalLineChart {
+    max-height: 100%; /* Ensure canvas does not exceed container */
+    max-width: 100%;
+}
+
 .mobile-nav-link.active {
     background-color: #2a5266;
     color: #ffd700;
     font-weight: 600;
-}
-#donutChartContainer, #lineChartContainer {
-    position: relative; /* Often needed for Chart.js responsiveness */
-    height: 200px; /* Or a bit more, e.g., 220px, adjust as needed */
-    width: 100%;
-}
-/* Ensure canvas fills its new container */
-#modalDonutChart, #modalLineChart {
-    max-height: 100%;
-    max-width: 100%;
 }
