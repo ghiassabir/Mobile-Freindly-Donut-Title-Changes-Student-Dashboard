@@ -320,24 +320,33 @@ function populateCBSkills(sectionKey, skillsData) {
 const modal = document.getElementById('detailModal');
 const modalQuestionDetailsContainer = document.getElementById('modalQuestionDetails');
 
+// Keep existing global variables like modalDonutChartInstance, modalLineChartInstance, modal etc.
+
 function openModal(title, contentDetails) { 
-    console.log("Opening modal with title:", title);
-    const modalHeaderH2 = modal.querySelector('.modal-header h2'); 
+    console.log("[openModal] Called with title:", title);
+    
+    const modalElement = document.getElementById('detailModal'); // Assuming 'modal' is the global var for this
+    const modalHeaderH2 = modalElement.querySelector('.modal-header h2'); 
+    const modalQuestionDetailsContainerElement = document.getElementById('modalQuestionDetails'); // Assuming 'modalQuestionDetailsContainer' is global var
+
     if(modalHeaderH2) {
         modalHeaderH2.textContent = title;
     } else {
+        console.error("[openModal] Modal title H2 element not found via .modal-header h2");
+        // Fallback if modal-header h2 isn't found (though it should be in the themed version)
         const directModalTitle = document.getElementById('modalTitle'); 
         if(directModalTitle) directModalTitle.textContent = title;
-        else console.error("Modal title element not found");
+        else console.error("[openModal] Modal title element with ID 'modalTitle' not found either.");
     }
     
-    if (!modalQuestionDetailsContainer) {
-        console.error("modalQuestionDetailsContainer not found!");
-        if(modal) modal.style.display="block"; 
+    if (!modalQuestionDetailsContainerElement) {
+        console.error("[openModal] modalQuestionDetailsContainer not found!");
+        if(modalElement) modalElement.style.display="block"; 
         return;
     }
-    modalQuestionDetailsContainer.innerHTML = ''; 
+    modalQuestionDetailsContainerElement.innerHTML = ''; 
     
+    // Sample dummy questions for the modal - using the same logic as before
     const dQ=[
         {text:"Solve for x: 2x + 5 = 15",yourAnswer:"x = 5",correct:true,classCorrectPercent:92,status:'answered'},
         {text:"Identify the main theme of paragraph 2.",yourAnswer:"Supporting detail A",correct:false,classCorrectPercent:75,status:'answered'},
@@ -354,16 +363,17 @@ function openModal(title, contentDetails) {
         else{sT='Incorrect';sC='bg-red-50 border-red-200';}
         d.className=`p-2 border rounded-md ${sC}`;
         d.innerHTML=`<p class="font-medium text-gray-700">Q${i+1}: ${q.text}</p><p>Your Answer: <span class="font-semibold ${q.status==='unanswered'?'':(q.c?'text-good':'text-poor')}">${q.yA}</span> (${sT})</p><p class="text-xs text-gray-500">Class Avg Correctness: ${q.classCorrectPercent}% ${q.classCorrectPercent>80?'<span class="arrow-up">↑</span>':'<span class="arrow-down">↓</span>'}</p>`;
-        modalQuestionDetailsContainer.appendChild(d);
+        modalQuestionDetailsContainerElement.appendChild(d);
     });
     
+    // Destroy existing chart instances
     if(modalDonutChartInstance) {
-        console.log("Destroying previous modalDonutChartInstance.");
+        console.log("[openModal] Destroying previous modalDonutChartInstance.");
         modalDonutChartInstance.destroy();
         modalDonutChartInstance = null;
     }
     if(modalLineChartInstance) {
-        console.log("Destroying previous modalLineChartInstance.");
+        console.log("[openModal] Destroying previous modalLineChartInstance.");
         modalLineChartInstance.destroy();
         modalLineChartInstance = null;
     }
@@ -372,49 +382,116 @@ function openModal(title, contentDetails) {
     const inc=dQ.filter(q=>q.s==='answered'&&!q.c).length;
     const un=dQ.filter(q=>q.s==='unanswered').length;
     
-    const donutCtx = document.getElementById('modalDonutChart')?.getContext('2d');
-    if (donutCtx) { 
-        console.log("Initializing Donut Chart in modal. Data (C,I,U):", cor, inc, un);
-        modalDonutChartInstance=new Chart(donutCtx,{
-            type:'doughnut',
-            data:{
-                labels:['Correct','Incorrect','Unanswered'],
-                datasets:[{
-                    data:[cor,inc,un],
-                    backgroundColor:['#4caf50','#f44336','#9e9e9e'], 
-                    hoverOffset: 4
-                }]
-            },
-            options:{
-                responsive:true,
-                maintainAspectRatio: false, // MODIFIED
-                plugins:{ legend:{ position:'bottom' }},
-                cutout:'50%'
+    console.log("[openModal] Donut chart data (Correct, Incorrect, Unanswered):", cor, inc, un);
+
+    const donutCanvas = document.getElementById('modalDonutChart');
+    if (donutCanvas) {
+        const donutContainer = donutCanvas.parentElement;
+        if (donutContainer) {
+            // Temporarily set background color for visibility check
+            donutContainer.style.backgroundColor = 'rgba(255, 0, 0, 0.1)'; // Light red
+            console.log("[openModal] Donut chart container found. Temp background set.");
+        } else {
+            console.error("[openModal] Parent container of donut chart canvas not found!");
+        }
+
+        const donutCtx = donutCanvas.getContext('2d');
+        if (donutCtx) { 
+            console.log("[openModal] Canvas context 'donutCtx' obtained for modalDonutChart.");
+            try {
+                modalDonutChartInstance = new Chart(donutCtx,{
+                    type:'doughnut',
+                    data:{
+                        labels:['Correct','Incorrect','Unanswered'],
+                        datasets:[{
+                            data:[cor,inc,un], // Using dynamic data
+                            backgroundColor:['#4caf50','#f44336','#9e9e9e'], 
+                            hoverOffset: 4
+                        }]
+                    },
+                    options:{
+                        responsive:true,
+                        maintainAspectRatio: false, 
+                        plugins:{ legend:{ position:'bottom' }},
+                        cutout:'50%'
+                    }
+                });
+                console.log("[openModal] New Donut Chart instance CREATED:", modalDonutChartInstance);
+            } catch (error) {
+                console.error("[openModal] ERROR creating Donut Chart:", error);
             }
-        });
+        } else {
+            console.error("[openModal] modalDonutChart canvas context NOT FOUND! Donut chart cannot be rendered.");
+        }
     } else {
-        console.error("modalDonutChart canvas context not found! Donut chart cannot be rendered.");
+        console.error("[openModal] modalDonutChart canvas element NOT FOUND!");
     }
 
-    const lineCtx = document.getElementById('modalLineChart')?.getContext('2d');
-    if (lineCtx) { 
-        console.log("Initializing Line Chart in modal.");
-        modalLineChartInstance=new Chart(lineCtx,{
-            type:'line',
-            data:{ /* ... same data as before ... */ },
-            options:{
-                responsive:true,
-                maintainAspectRatio: false, // MODIFIED
-                scales:{y:{beginAtZero:true,max:100}},
-                plugins: { legend: {display: true, position: 'bottom'}}
+    const lineCanvas = document.getElementById('modalLineChart');
+    if (lineCanvas) {
+        const lineCtx = lineCanvas.getContext('2d');
+        if (lineCtx) { 
+            console.log("[openModal] Canvas context 'lineCtx' obtained for modalLineChart.");
+            try {
+                modalLineChartInstance = new Chart(lineCtx,{
+                    type:'line',
+                    data:{
+                        labels:['Attempt 1','Attempt 2','Attempt 3','Attempt 4','Attempt 5'],
+                        datasets:[
+                            {label:'You',data:Array.from({length:5},()=>50+Math.random()*40),borderColor:'#2a5266',tension:0.1,fill:false},
+                            {label:'Class Average',data:Array.from({length:5},()=>45+Math.random()*35),borderColor:'#757575',borderDash:[5,5],tension:0.1,fill:false}
+                        ]
+                    },
+                    options:{
+                        responsive:true,
+                        maintainAspectRatio: false, 
+                        scales:{y:{beginAtZero:true,max:100}},
+                        plugins: { legend: {display: true, position: 'bottom'}}
+                    }
+                });
+                console.log("[openModal] New Line Chart instance CREATED:", modalLineChartInstance);
+            } catch (error) {
+                console.error("[openModal] ERROR creating Line Chart:", error);
             }
-        });
+        } else {
+            console.error("[openModal] modalLineChart canvas context NOT FOUND!");
+        }
     } else {
-        console.error("modalLineChart canvas context not found!");
+        console.error("[openModal] modalLineChart canvas element NOT FOUND!");
     }
-    if(modal) modal.style.display="block";
+
+    if(modalElement) modalElement.style.display="block"; 
 }
 
+function closeModal() { 
+    const modalElement = document.getElementById('detailModal');
+    if(modalElement) modalElement.style.display = "none"; 
+    
+    if (modalDonutChartInstance) { 
+        console.log("[closeModal] Destroying modalDonutChartInstance.");
+        modalDonutChartInstance.destroy(); 
+        modalDonutChartInstance = null; 
+    }
+    if (modalLineChartInstance) { 
+        console.log("[closeModal] Destroying modalLineChartInstance.");
+        modalLineChartInstance.destroy(); 
+        modalLineChartInstance = null; 
+    }
+    // Remove temporary background from donut container
+    const donutCanvas = document.getElementById('modalDonutChart');
+    if (donutCanvas && donutCanvas.parentElement) {
+        donutCanvas.parentElement.style.backgroundColor = ''; // Reset background
+    }
+}
+
+// Ensure this is the only window.onclick assignment for the modal
+window.onclick = function(event) { 
+    const modalElement = document.getElementById('detailModal');
+    if (event.target == modalElement) {
+        console.log("[window.onclick] Clicked outside modal content. Closing modal.");
+        closeModal(); 
+    }
+}
 
 function closeModal() { 
     if(modal) modal.style.display = "none"; 
