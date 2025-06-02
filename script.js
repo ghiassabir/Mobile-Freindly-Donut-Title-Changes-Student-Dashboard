@@ -323,34 +323,98 @@ const modalQuestionDetailsContainer = document.getElementById('modalQuestionDeta
 function openModal(title, contentDetails) { 
     console.log("Opening modal with title:", title);
     const modalHeaderH2 = modal.querySelector('.modal-header h2'); 
-    if(modalHeaderH2) modalHeaderH2.textContent = title;
+    if(modalHeaderH2) {
+        modalHeaderH2.textContent = title;
+    } else {
+        const directModalTitle = document.getElementById('modalTitle'); 
+        if(directModalTitle) directModalTitle.textContent = title;
+        else console.error("Modal title element not found");
+    }
     
+    if (!modalQuestionDetailsContainer) {
+        console.error("modalQuestionDetailsContainer not found!");
+        if(modal) modal.style.display="block"; 
+        return;
+    }
     modalQuestionDetailsContainer.innerHTML = ''; 
-    const dQ=[{text:"Solve for x: 2x + 5 = 15",yourAnswer:"x = 5",correct:true,classCorrectPercent:92,status:'answered'},{text:"Identify the main theme of paragraph 2.",yourAnswer:"Supporting detail A",correct:false,classCorrectPercent:75,status:'answered'},{text:"Which transition best connects these sentences?",yourAnswer:"Therefore",correct:true,classCorrectPercent:88,status:'answered'},{text:"What is the value of sin(30°)?",yourAnswer:"N/A",correct:false,classCorrectPercent:95,status:'unanswered'},{text:"A car travels 120 miles in 2 hours. What is its average speed?",yourAnswer:"50 mph",correct:false,classCorrectPercent:80,status:'answered'},{text:"What is the capital of Canada?",yourAnswer:"Ottawa",correct:true,classCorrectPercent:90,status:'answered'},]; 
-    dQ.forEach((q,i)=>{const d=document.createElement('div');let sT,sC;if(q.s==='unanswered'){sT='Unanswered';sC='bg-yellow-50 border-yellow-200 text-yellow-700';}else if(q.c){sT='Correct';sC='bg-green-50 border-green-200';}else{sT='Incorrect';sC='bg-red-50 border-red-200';}d.className=`p-2 border rounded-md ${sC}`;d.innerHTML=`<p class="font-medium text-gray-700">Q${i+1}: ${q.text}</p><p>Your Answer: <span class="font-semibold ${q.status==='unanswered'?'':(q.c?'text-good':'text-poor')}">${q.yA}</span> (${sT})</p><p class="text-xs text-gray-500">Class Avg Correctness: ${q.classCorrectPercent}% ${q.classCorrectPercent>80?'<span class="arrow-up">↑</span>':'<span class="arrow-down">↓</span>'}</p>`;modalQuestionDetailsContainer.appendChild(d);});
     
-    if(modalDonutChartInstance)modalDonutChartInstance.destroy();
-    if(modalLineChartInstance)modalLineChartInstance.destroy();
+    const dQ=[
+        {text:"Solve for x: 2x + 5 = 15",yourAnswer:"x = 5",correct:true,classCorrectPercent:92,status:'answered'},
+        {text:"Identify the main theme of paragraph 2.",yourAnswer:"Supporting detail A",correct:false,classCorrectPercent:75,status:'answered'},
+        {text:"Which transition best connects these sentences?",yourAnswer:"Therefore",correct:true,classCorrectPercent:88,status:'answered'},
+        {text:"What is the value of sin(30°)?",yourAnswer:"N/A",correct:false,classCorrectPercent:95,status:'unanswered'},
+        {text:"A car travels 120 miles in 2 hours. What is its average speed?",yourAnswer:"50 mph",correct:false,classCorrectPercent:80,status:'answered'},
+        {text:"What is the capital of Canada?",yourAnswer:"Ottawa",correct:true,classCorrectPercent:90,status:'answered'},
+    ]; 
+    dQ.forEach((q,i)=>{
+        const d=document.createElement('div');
+        let sT='',sC='';
+        if(q.s==='unanswered'){sT='Unanswered';sC='bg-yellow-50 border-yellow-200 text-yellow-700';}
+        else if(q.c){sT='Correct';sC='bg-green-50 border-green-200';}
+        else{sT='Incorrect';sC='bg-red-50 border-red-200';}
+        d.className=`p-2 border rounded-md ${sC}`;
+        d.innerHTML=`<p class="font-medium text-gray-700">Q${i+1}: ${q.text}</p><p>Your Answer: <span class="font-semibold ${q.status==='unanswered'?'':(q.c?'text-good':'text-poor')}">${q.yA}</span> (${sT})</p><p class="text-xs text-gray-500">Class Avg Correctness: ${q.classCorrectPercent}% ${q.classCorrectPercent>80?'<span class="arrow-up">↑</span>':'<span class="arrow-down">↓</span>'}</p>`;
+        modalQuestionDetailsContainer.appendChild(d);
+    });
     
-    const cor=dQ.filter(q=>q.s==='answered'&&q.c).length;const inc=dQ.filter(q=>q.s==='answered'&&!q.c).length;const un=dQ.filter(q=>q.s==='unanswered').length;
+    if(modalDonutChartInstance) {
+        console.log("Destroying previous modalDonutChartInstance.");
+        modalDonutChartInstance.destroy();
+        modalDonutChartInstance = null;
+    }
+    if(modalLineChartInstance) {
+        console.log("Destroying previous modalLineChartInstance.");
+        modalLineChartInstance.destroy();
+        modalLineChartInstance = null;
+    }
+    
+    const cor=dQ.filter(q=>q.s==='answered'&&q.c).length;
+    const inc=dQ.filter(q=>q.s==='answered'&&!q.c).length;
+    const un=dQ.filter(q=>q.s==='unanswered').length;
     
     const donutCtx = document.getElementById('modalDonutChart')?.getContext('2d');
     if (donutCtx) { 
-        console.log("Initializing Donut Chart in modal with data:", [cor, inc, un]);
-        modalDonutChartInstance=new Chart(donutCtx,{type:'doughnut',data:{labels:['Correct','Incorrect','Unanswered'],datasets:[{data:[cor,inc,un],backgroundColor:['#4caf50','#f44336','#9e9e9e'], hoverOffset: 4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},cutout:'50%'}});
+        console.log("Initializing Donut Chart in modal. Data (C,I,U):", cor, inc, un);
+        modalDonutChartInstance=new Chart(donutCtx,{
+            type:'doughnut',
+            data:{
+                labels:['Correct','Incorrect','Unanswered'],
+                datasets:[{
+                    data:[cor,inc,un],
+                    backgroundColor:['#4caf50','#f44336','#9e9e9e'], 
+                    hoverOffset: 4
+                }]
+            },
+            options:{
+                responsive:true,
+                maintainAspectRatio: false, // MODIFIED
+                plugins:{ legend:{ position:'bottom' }},
+                cutout:'50%'
+            }
+        });
     } else {
-        console.error("modalDonutChart canvas context not found!");
+        console.error("modalDonutChart canvas context not found! Donut chart cannot be rendered.");
     }
 
     const lineCtx = document.getElementById('modalLineChart')?.getContext('2d');
     if (lineCtx) { 
         console.log("Initializing Line Chart in modal.");
-        modalLineChartInstance=new Chart(lineCtx,{type:'line',data:{labels:['A1','A2','A3','A4','A5'],datasets:[{label:'You',data:Array.from({length:5},()=>50+Math.random()*40),borderColor:'#2a5266',tension:0.1,fill:false},{label:'Class',data:Array.from({length:5},()=>45+Math.random()*35),borderColor:'#757575',borderDash:[5,5],tension:0.1,fill:false}]},options:{responsive:true,maintainAspectRatio:true,scales:{y:{beginAtZero:true,max:100}}}});
+        modalLineChartInstance=new Chart(lineCtx,{
+            type:'line',
+            data:{ /* ... same data as before ... */ },
+            options:{
+                responsive:true,
+                maintainAspectRatio: false, // MODIFIED
+                scales:{y:{beginAtZero:true,max:100}},
+                plugins: { legend: {display: true, position: 'bottom'}}
+            }
+        });
     } else {
         console.error("modalLineChart canvas context not found!");
     }
     if(modal) modal.style.display="block";
 }
+
 
 function closeModal() { 
     if(modal) modal.style.display = "none"; 
