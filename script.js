@@ -1,39 +1,25 @@
 // --- CONFIGURATION ---
 // IMPORTANT: Replace these with the actual published URLs from your Google Sheet
-const GOOGLE_SHEET_CSV_URLS = {
-    masterQuizData: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSySYBO9YL3N4aUG3JEYZMQQIv9d1oSm3ba4Ty9Gt4SsGs2zmTS_k81rH3Qv41mZvClnayNcDpl_QbI/pub?gid=1890969747&single=true&output=csv', // This corresponds to DashboardFeed_AggregatedScores
-    questionData: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSySYBO9YL3N4aUG3JEYZMQQIv9d1oSm3ba4Ty9Gt4SsGs2zmTS_k81rH3Qv41mZvClnayNcDpl_QbI/pub?gid=822014112&single=true&output=csv'     // This corresponds to DashboardFeed_QuestionDetails
-};
-const LOCAL_STORAGE_STUDENT_ID_KEY = 'satHubStudentGmailId'; // Use Gmail ID
+const AGGREGATED_SCORES_CSV_URL = 'YOUR_PUBLISHED_AGGREGATED_SCORES_CSV_URL_HERE'; 
+const QUESTION_DETAILS_CSV_URL = 'YOUR_PUBLISHED_QUESTION_DETAILS_CSV_URL_HERE'; 
+
+const STUDENT_IDENTIFIER_KEY = 'satHubStudentEmail'; // Key for local storage
 
 // --- GLOBAL DATA (will be populated from CSVs) ---
-let allMasterQuizData = []; // Will store data from DashboardFeed_AggregatedScores.csv
-let allQuestionData = [];   // Will store data from DashboardFeed_QuestionDetails.csv
-let currentStudentData = { // Structured object for the dashboard's display
-    masterQuizzes: [],
-    questions: [],
-    profile: {},
-    latestScores: { total: "-", rw: "-", math: "-", avgEocKhan: "-" },
-    classAveragesGlobal: { total: "-", rw: "-", math: "-", avgEocKhan: "-" },
-    scoreTrend: { labels: [], studentScores: [], classAvgScores: [] },
-    overallSkillPerformance: { labels: ['Reading', 'Writing & Language', 'Math'], studentAccuracy: [0,0,0], classAvgAccuracy: [0,0,0] },
-    strengths: [], weaknesses: [],
-    timeSpent: { studentAvg: "N/A", studentUnit: "", classAvg: "N/A", classUnit: ""},
-    cbPracticeTests: [], 
-    eocQuizzes: { reading: [], writing: [], math: [] }, 
-    khanAcademy: { reading: [], writing: [], math: [] }, 
-    cbSkills: { reading: [], writing: [], math: [] }
-};
+let allAggregatedData = []; // Stores ALL fetched aggregated data once
+let allQuestionData = [];   // Stores ALL fetched question details data once
+let currentStudentData = {}; // Structured object for the dashboard's display
 
-// --- DOM ELEMENTS (Declared globally for easy access after DOMContentLoaded) ---
+// --- DOM Elements (Declared globally, assigned in DOMContentLoaded) ---
 let studentIdInputContainerEl, studentIdInputEl, loadDataButtonEl, idInputErrorEl;
 let loadingMessageEl, errorMessageEl, noDataMessageEl, dashboardRootContainerEl;
 let dashboardStudentNameEl, changeIdButtonEl, retryIdButtonEl;
 let overviewCardsContainerEl, scoreTrendChartEl, skillPerformanceChartEl;
-let strengthsListEl, weaknessesListEl, practiceTestsTableBodyEl, canvasKhanQuizzesTableBodyEl;
-let detailedSkillAnalysisContainerEl, currentYearEl;
+let strengthsListEl, weaknessesListEl, practiceTestsTableBodyEl;
+let currentYearEl; 
 let tabButtons, tabPanes;
-let hamburgerButton, mobileMenu, mobileChangeIdLink; // Added for new mobile flow
+let hamburgerButton, mobileMenu, mobileChangeIdLink; 
+let modal, modalQuestionDetailsContainer; // Added modal elements globally
 
 // --- Chart Instances (Global Scope) ---
 let scoreTrendChartInstance = null;
@@ -41,85 +27,43 @@ let skillPerformanceChartInstance = null;
 let modalDonutChartInstance = null;
 let modalLineChartInstance = null;
 
-// --- ICON SVGs (Used directly in HTML, no need for JS variables unless dynamically injected) ---
-// Note: You need to ensure these SVGs or equivalent icons are correctly rendered in your HTML/CSS
+// --- ICON SVGs (Used directly in HTML or injected, defined here for consistency) ---
 const icons = {
     checkCircle: `<svg class="w-5 h-5 mr-2 inline text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`,
     xCircle: `<svg class="w-5 h-5 mr-2 inline text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`,
 };
 
 
-// --- EVENT LISTENERS & INITIALIZATION ---
-document.addEventListener('DOMContentLoaded', () => {
-    // Assign DOM elements once the DOM is loaded
-    studentIdInputContainerEl = document.getElementById('student-id-input-container');
-    studentIdInputEl = document.getElementById('studentIdInput');
-    loadDataButtonEl = document.getElementById('loadDataButton');
-    idInputErrorEl = document.getElementById('id-input-error');
-    loadingMessageEl = document.getElementById('loading-message');
-    errorMessageEl = document.getElementById('error-message');
-    noDataMessageEl = document.getElementById('no-data-message');
-    dashboardRootContainerEl = document.getElementById('main-dashboard-content'); // Updated ID
-    dashboardStudentNameEl = document.getElementById('dashboard-student-name'); // Updated ID
-    changeIdButtonEl = document.getElementById('changeIdButton');
-    retryIdButtonEl = document.getElementById('retryIdButton'); // This is the retry button in no-data-message
-    overviewCardsContainerEl = document.getElementById('overview-cards-container');
-    scoreTrendChartEl = document.getElementById('scoreTrendChart');
-    skillPerformanceChartEl = document.getElementById('overallSkillChart'); // Updated ID
-    strengthsListEl = document.getElementById('strengths-list'); // Updated ID
-    weaknessesListEl = document.getElementById('weaknesses-list'); // Updated ID
-    practiceTestsTableBodyEl = document.getElementById('practiceTests-table-body'); // Updated ID
-    // canvasKhanQuizzesTableBodyEl not directly found, using dynamic generation below
-    detailedSkillAnalysisContainerEl = document.getElementById('detailed-skill-analysis-container');
-    currentYearEl = document.getElementById('currentYear'); // Updated ID
-    tabButtons = document.querySelectorAll('.tab-button'); // Updated class
-    tabPanes = document.querySelectorAll('.tab-pane'); // Updated class
-    hamburgerButton = document.getElementById('hamburgerButton');
-    mobileMenu = document.getElementById('mobileMenu');
-    mobileChangeIdLink = document.getElementById('mobileChangeIdLink'); // Updated ID
-
-    // Set current year in footer
-    if(currentYearEl) currentYearEl.textContent = new Date().getFullYear();
-
-    // Setup tab switching
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            const targetTab = button.dataset.tab;
-            tabPanes.forEach(pane => {
-                pane.id === `${targetTab}-content` ? pane.classList.remove('hidden') : pane.classList.add('hidden');
-            });
-            // Re-render charts when their tab becomes visible
-            if (targetTab === 'overview') {
-                setTimeout(() => { // Give browser time to render canvas element
-                    initializeOverviewCharts(currentStudentData);
-                }, 100);
-            }
-        });
-    });
-
-    // Mobile menu toggle
-    if(hamburgerButton && mobileMenu) {
-        hamburgerButton.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
-        mobileMenu.querySelectorAll('.mobile-nav-link').forEach(link => {
-            link.addEventListener('click', () => mobileMenu.classList.add('hidden')); // Close on click
-        });
+// --- Helper Functions ---
+function formatDate(dateString) { 
+    if (!dateString || String(dateString).toLowerCase() === "n/a" || String(dateString).trim() === "") return "-";
+    try {
+        const date = new Date(dateString + 'T00:00:00'); 
+        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options); 
+    } catch (e) {
+        console.warn("Could not format date:", dateString, e);
+        return dateString; 
     }
+}
 
-    // Login/Logout/Retry buttons
-    if(loadDataButtonEl) loadDataButtonEl.addEventListener('click', handleLogin);
-    if(studentIdInputEl) studentIdInputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
-    if(changeIdButtonEl) changeIdButtonEl.addEventListener('click', clearSavedStudentIdAndPrompt);
-    if(retryIdButtonEl) retryIdButtonEl.addEventListener('click', clearSavedStudentIdAndPrompt);
-    if(mobileChangeIdLink) mobileChangeIdLink.addEventListener('click', clearSavedStudentIdAndPrompt);
+function calculateAverageCorrectness(questionItems) {
+    if (questionItems.length === 0) return 0;
+    const correctCount = questionItems.filter(q => String(q.IsCorrect).toUpperCase() === 'TRUE').length;
+    const attemptedCount = questionItems.filter(q => q.StudentAnswer && String(q.StudentAnswer).trim() !== '').length; 
+    if (attemptedCount === 0) return 0; 
+    return Math.round((correctCount / attemptedCount) * 100);
+}
 
-    // Initial check for student login
-    checkStudentLogin();
-});
+function getPerformanceClass(score) {
+    if (score === null || isNaN(score)) return ''; 
+    if (score >= 85) return 'performance-good';
+    if (score >= 70) return 'performance-average';
+    return 'performance-poor';
+}
 
 
-// --- UI MANAGEMENT FUNCTIONS ---
+// --- UI Management Functions ---
 function showLoadingScreen(message = "Loading your personalized dashboard...") {
     if(loadingMessageEl) {
         loadingMessageEl.innerHTML = `<svg class="animate-spin h-8 w-8 text-sky-500 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ${message}`;
@@ -147,7 +91,7 @@ function showInputScreen(errorMessage = "") {
         idInputErrorEl.classList.add('hidden');
     }
     if(studentIdInputEl) {
-        studentIdInputEl.value = localStorage.getItem(LOCAL_STORAGE_STUDENT_ID_KEY) || ""; // Pre-fill if known
+        studentIdInputEl.value = localStorage.getItem(LOCAL_STORAGE_STUDENT_ID_KEY) || ""; 
         studentIdInputEl.focus();
     }
 }
@@ -173,17 +117,23 @@ function displayNoDataFoundScreen() {
     if(retryIdButtonEl) retryIdButtonEl.classList.remove('hidden');
 }
 
-// --- LOGIN/LOGOUT LOGIC ---
+
+// --- Login/Logout & Header Display Logic ---
 function checkStudentLogin() {
-    const studentEmail = localStorage.getItem(LOCAL_STORAGE_STUDENT_ID_KEY);
+    const studentEmail = localStorage.getItem(STUDENT_IDENTIFIER_KEY);
+    const loginModal = document.getElementById('loginModal');
+    
     if (studentEmail) {
-        showLoadingScreen(); // Show loading while fetching
-        dashboardRootContainerEl.classList.add('hidden'); // Ensure dashboard is hidden until data loaded
-        updateHeaderDisplay(studentEmail, true);
-        loadAndDisplayData(studentEmail);
+        loginModal.style.display = 'none'; // Hide login modal
+        dashboardRootContainerEl.classList.add('hidden'); // Initially hide dashboard content until data loads
+        updateHeaderDisplay(studentEmail, true); // Update header immediately
+        loadAndDisplayData(studentEmail); // Load data for this student
     } else {
-        showInputScreen(); // Show login prompt
-        updateHeaderDisplay(null, false);
+        loginModal.style.display = 'block'; // Show login modal
+        dashboardRootContainerEl.classList.add('hidden'); // Ensure dashboard is hidden
+        updateHeaderDisplay(null, false); // Clear header display
+        if(studentIdInputEl) studentIdInputEl.value = ''; // Clear input field
+        document.getElementById('id-input-error').classList.add('hidden'); // Hide any error
     }
 }
 
@@ -199,21 +149,27 @@ async function handleLogin() {
     idInputErrorEl.classList.add('hidden'); // Hide any previous input errors
 
     try {
-        // Fetch all data from published Google Sheets
+        // Fetch all data from published Google Sheets once
         // These will be stored globally for later filtering per student
-        allMasterQuizData = await fetchCsvData(GOOGLE_SHEET_CSV_URLS.masterQuizData);
-        allQuestionData = await fetchCsvData(GOOGLE_SHEET_CSV_URLS.questionData);
+        allMasterQuizData = await fetchCsvData(AGGREGATED_SCORES_CSV_URL);
+        allQuestionData = await fetchCsvData(QUESTION_DETAILS_CSV_URL);
 
         // Validate if the entered student email exists in the fetched data
         const studentExists = allMasterQuizData.some(row => row.StudentGmailID === studentEmail) ||
                              allQuestionData.some(row => row.StudentGmailID === studentEmail);
 
         if (studentExists) {
-            localStorage.setItem(LOCAL_STORAGE_STUDENT_ID_KEY, studentEmail);
-            showLoadingScreen("Data loaded, personalizing dashboard...");
-            updateHeaderDisplay(studentEmail, true);
-            loadAndDisplayData(studentEmail); // Load and display filtered data
+            localStorage.setItem(STUDENT_IDENTIFIER_KEY, studentEmail);
+            document.getElementById('loginModal').style.display = 'none';
             dashboardRootContainerEl.classList.remove('hidden'); // Make dashboard visible
+            updateHeaderDisplay(studentEmail, true); // Update header with student name
+            loadAndDisplayData(studentEmail); // Load and display filtered data
+            
+            // Activate Overview tab after data loads
+            const firstDesktopTab = document.querySelector('.tab-button[data-tab="overview"]');
+            if (firstDesktopTab) {
+                firstDesktopTab.click(); // Programmatically click to activate and initialize charts
+            }
         } else {
             showInputScreen(); // Go back to input screen
             idInputErrorEl.textContent = `Email "${studentEmail}" not found in our records. Please check and try again.`;
@@ -227,9 +183,8 @@ async function handleLogin() {
 }
 
 function handleLogout() {
-    localStorage.removeItem(LOCAL_STORAGE_STUDENT_ID_KEY);
-    // Reload page to reset state and show login modal
-    window.location.reload(); 
+    localStorage.removeItem(STUDENT_IDENTIFIER_KEY);
+    window.location.reload(); // Reloads the page to reset state and show login modal
 }
 
 function updateHeaderDisplay(studentEmail, loggedIn) {
@@ -241,7 +196,7 @@ function updateHeaderDisplay(studentEmail, loggedIn) {
         if(mobileChangeIdLink) mobileChangeIdLink.classList.remove('hidden');
     } else {
         dashboardStudentNameEl.textContent = `Welcome!`;
-        dashboardStudentNameEl.classList.add('hidden'); // Hide if no student or not logged in
+        dashboardStudentNameEl.classList.add('hidden'); 
         if(changeIdButtonEl) changeIdButtonEl.classList.add('hidden');
         if(mobileChangeIdLink) mobileChangeIdLink.classList.add('hidden');
     }
@@ -254,16 +209,15 @@ async function fetchCsvData(url) {
     return new Promise((resolve, reject) => {
         PapaParse.parse(url, {
             download: true,
-            header: true, // Treat first row as headers
+            header: true, 
             skipEmptyLines: true,
-            worker: true, // Use a web worker for parsing (can improve performance for large files)
+            worker: true, 
             complete: function(results) {
                 if (results.errors.length > 0) {
                     console.error(`PapaParse errors for ${url}:`, results.errors);
                     reject(new Error(`PapaParse errors: ${JSON.stringify(results.errors)}`));
                 }
                 console.log(`Fetched data from ${url}. Rows: ${results.data.length}`);
-                // Filter out rows where all values are empty (PapaParse might return some)
                 const cleanedData = results.data.filter(row => Object.values(row).some(value => value !== null && String(value).trim() !== ''));
                 resolve(cleanedData);
             },
@@ -279,7 +233,7 @@ async function fetchCsvData(url) {
 function transformDataForDashboard(studentAggregatedAssessments, allAggregatedData, studentQuestionDetails, studentEmail) {
     const student = { 
         name: studentEmail, 
-        targetScore: 1400, // Hardcoded for now, could be from another sheet or user setting
+        targetScore: 1400, 
         latestScores: { total: "-", rw: "-", math: "-", avgEocKhan: "-" },
         classAveragesGlobal: { total: "-", rw: "-", math: "-", avgEocKhan: "-" }, 
         scoreTrend: { labels: [], studentScores: [], classAvgScores: [] },
@@ -289,15 +243,14 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
         cbPracticeTests: [], 
         eocQuizzes: { reading: [], writing: [], math: [] }, 
         khanAcademy: { reading: [], writing: [], math: [] }, 
-        cbSkills: { reading: [], writing: [], math: [] } // For detailed skill tabs
+        cbSkills: { reading: [], writing: [], math: [] } 
     };
 
     // --- Student Name ---
-    const studentFullNameEntry = allAggregatedData.find(row => row.StudentGmailID === studentEmail);
-    if(studentFullNameEntry && studentFullNameEntry.StudentName_Full) { // Assuming DashboardFeed_AggregatedScores might have this if pulled from Students_CanvasData
-        student.name = studentFullNameEntry.StudentName_Full;
+    const studentNameEntry = allAggregatedData.find(row => row.StudentGmailID === studentEmail);
+    if(studentNameEntry && studentNameEntry.StudentName_Full) { 
+        student.name = studentNameEntry.StudentName_Full;
     } else {
-        // Fallback to capitalizing email part if no full name found
         const emailParts = studentEmail.split('@')[0].split('.');
         student.name = emailParts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
     }
@@ -313,16 +266,17 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
     
     const allEocKhanScores = allAggregatedData.filter(a => (a.AssessmentSource.includes('EOC') || a.AssessmentSource.includes('Khan')) && a.Score_Percentage !== '' && a.Score_Percentage !== null);
     if (allEocKhanScores.length > 0) {
-        student.classAveragesGlobal.avgEocKhan = Math.round(allEocKhanScores.reduce((sum, a) => sum + parseFloat(a.Score_Percentage.replace('%','')), 0) / allEocKhanScores.length);
+        const totalEocKhanPct = allEocKhanScores.reduce((sum, a) => sum + parseFloat(a.Score_Percentage.replace('%','')), 0);
+        student.classAveragesGlobal.avgEocKhan = Math.round(totalEocKhanPct / allEocKhanScores.length);
     }
 
 
-    // --- Student Specific Data ---
+    // --- Student Specific Data (Filtered Data) ---
 
     // Latest Scores (Overall Dashboard Snapshot)
     const studentLatestCBTests = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Canvas CB Test' && a.Score_Scaled_Total !== '' && a.Score_Scaled_Total !== null);
     if (studentLatestCBTests.length > 0) {
-        studentLatestCBTests.sort((a,b) => new Date(b.AttemptDate) - new Date(a.AttemptDate)); // Latest first
+        studentLatestCBTests.sort((a,b) => new Date(b.AttemptDate) - new Date(a.AttemptDate)); 
         const latestTest = studentLatestCBTests[0];
         student.latestScores.total = parseFloat(latestTest.Score_Scaled_Total);
         student.latestScores.rw = parseFloat(latestTest.ScaledScore_RW);
@@ -348,7 +302,7 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
         classAvgRW: student.classAveragesGlobal.rw, 
         classAvgMath: student.classAveragesGlobal.math,
         classAvgTotal: student.classAveragesGlobal.total
-    })).sort((a,b) => new Date(a.date) - new Date(b.date)); // Sort ascending by date for trend
+    })).sort((a,b) => new Date(a.date) - new Date(b.date)); 
 
 
     // Filter score trend to only include aggregate CB Tests for cleaner chart
@@ -372,7 +326,7 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
     });
 
     // Khan Academy
-    const khanIncludes = { reading: 'Reading', writing: 'Writing', math: 'Math' }; // More flexible includes
+    const khanIncludes = { reading: 'Reading', writing: 'Writing', math: 'Math' }; 
     Object.keys(khanIncludes).forEach(subjectKey => {
         student.khanAcademy[subjectKey] = studentAggregatedAssessments.filter(a => 
             a.AssessmentSource === 'Khan Academy Practice' && a.AssessmentName.includes(khanIncludes[subjectKey]))
@@ -387,17 +341,19 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
     
     // CB Skills (Overall Skill Performance & Strengths/Improvements)
     const skillCategoryFilters = [
-        { key: 'reading', filter: q => q.SAT_Skill_Tag && q.SAT_Skill_Tag.includes('Reading'), label: 'Reading' },
-        { key: 'writing', filter: q => q.SAT_Skill_Tag && q.SAT_Skill_Tag.includes('Writing'), label: 'Writing & Language' },
-        { key: 'math', filter: q => q.SAT_Skill_Tag && q.SAT_Skill_Tag.includes('Math'), label: 'Math' }
+        { key: 'reading', tagPrefix: 'Reading', label: 'Reading' },
+        { key: 'writing', tagPrefix: 'Writing', label: 'Writing & Language' },
+        { key: 'math', tagPrefix: 'Math', label: 'Math' }
     ];
 
     skillCategoryFilters.forEach((category, index) => {
-        const categoryQuestions = studentQuestionDetails.filter(category.filter);
+        const categoryQuestions = studentQuestionDetails.filter(q => 
+            q.SAT_Skill_Tag && q.SAT_Skill_Tag.includes(category.tagPrefix)
+        );
         const studentAccuracy = calculateAverageCorrectness(categoryQuestions);
         student.overallSkillPerformance.studentAccuracy[index] = studentAccuracy;
         student.overallSkillPerformance.labels[index] = category.label; 
-        student.overallSkillPerformance.classAvgAccuracy[index] = student.classAveragesGlobal.avgEocKhan; // Placeholder with overall avg
+        student.overallSkillPerformance.classAvgAccuracy[index] = student.classAveragesGlobal.avgEocKhan; 
         
         const uniqueSkillsMap = {}; 
         categoryQuestions.forEach(q => {
@@ -429,15 +385,6 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
     student.timeSpent = { studentAvg: "N/A", studentUnit: "", classAvg: "N/A", classUnit: ""}; 
 
     return student;
-}
-
-// Helper to calculate average correctness from filtered question details
-function calculateAverageCorrectness(questionItems) {
-    if (questionItems.length === 0) return 0;
-    const correctCount = questionItems.filter(q => String(q.IsCorrect).toUpperCase() === 'TRUE').length;
-    const attemptedCount = questionItems.filter(q => q.StudentAnswer && String(q.StudentAnswer).trim() !== '').length; 
-    if (attemptedCount === 0) return 0; 
-    return Math.round((correctCount / attemptedCount) * 100);
 }
 
 
@@ -476,7 +423,7 @@ function initializeOverviewCharts(studentData) {
                 labels: studentData.overallSkillPerformance.labels, 
                 datasets: [
                     { label: 'Your Accuracy', data: studentData.overallSkillPerformance.studentAccuracy, backgroundColor: CHART_PRIMARY_BG_BAR },
-                    { label: 'Class Average Accuracy', data: studentData.overallSkillPerformance.classAvgAccuracy, backgroundColor: 'rgba(117, 117, 117, 0.7)' } // Consistent secondary BG
+                    { label: 'Class Average Accuracy', data: studentData.overallSkillPerformance.classAvgAccuracy, backgroundColor: 'rgba(117, 117, 117, 0.7)' } 
                 ] 
             }, 
             options: { ...chartOptions, scales: { y: { beginAtZero: true, max: 100 } } } 
@@ -491,7 +438,7 @@ function populateOverviewSnapshot(studentData) {
     document.getElementById('latestMathScore').innerHTML = `${studentData.latestScores.math || '-'} <span class="text-lg text-gray-500">/ 800</span>`;
     document.getElementById('avgEocKhanScore').textContent = `${studentData.latestScores.avgEocKhan || '-'}%`;
     document.getElementById('targetScore').textContent = studentData.targetScore || '-';
-    document.getElementById('targetScoreDifference').textContent = `Goal: ${studentData.targetScore && studentData.latestScores.total ? (studentData.targetScore - parseFloat(studentData.latestScores.total)) : '-'} points`;
+    document.getElementById('targetScoreDifference').textContent = `Goal: ${studentData.targetScore && studentData.latestScores.total && !isNaN(parseFloat(studentData.latestScores.total)) ? (studentData.targetScore - parseFloat(studentData.latestScores.total)) : '-'} points`;
 
     const overviewStrengthsList = document.getElementById('strengths-list'); 
     const overviewImprovementsList = document.getElementById('weaknesses-list');
@@ -577,7 +524,7 @@ function populateKhanSection(sectionKey, khanItems) {
 }
 
 function getPerformanceClass(score) {
-    if (score === null || isNaN(score)) return ''; // No specific class if score is not valid
+    if (score === null || isNaN(score)) return ''; 
     if (score >= 85) return 'performance-good';
     if (score >= 70) return 'performance-average';
     return 'performance-poor';
@@ -606,11 +553,13 @@ function populateCBSkills(sectionKey, skillsData) {
      if ((skillsData || []).length === 0) { container.innerHTML = `<p class="text-gray-500 p-3">No Skill data available for ${sectionKey}.</p>`;}
 }
 
-const modal = document.getElementById('detailModal');
-const modalQuestionDetailsContainer = document.getElementById('modalQuestionDetails');
-
+// Modal functions
 function openModal(title, contentDetails) { 
     console.log("Opening modal with title:", title, "Content:", contentDetails);
+    if (!modal || !modalQuestionDetailsContainer) {
+        console.error("Modal elements not found. Cannot open modal.");
+        return;
+    }
     const modalHeaderH2 = modal.querySelector('.modal-header h2'); 
     if(modalHeaderH2) modalHeaderH2.textContent = title;
     
@@ -619,7 +568,6 @@ function openModal(title, contentDetails) {
     const studentEmail = localStorage.getItem(STUDENT_IDENTIFIER_KEY);
     const assessmentName = contentDetails.data.name;
 
-    // Filter question details for the specific assessment clicked by the current student
     const assessmentQuestions = allQuestionDetailsData.filter(q => 
         q.StudentGmailID === studentEmail && 
         q.AssessmentName === assessmentName 
@@ -662,7 +610,6 @@ function openModal(title, contentDetails) {
     if(modalDonutChartInstance) modalDonutChartInstance.destroy();
     if(modalLineChartInstance) modalLineChartInstance.destroy();
     
-    // Donut Chart for Question Analysis
     const correctCount = assessmentQuestions.filter(q => String(q.IsCorrect).toUpperCase() === 'TRUE').length;
     const incorrectCount = assessmentQuestions.filter(q => String(q.IsCorrect).toUpperCase() === 'FALSE').length;
     const unansweredCount = assessmentQuestions.filter(q => !q.StudentAnswer || String(q.StudentAnswer).trim() === '').length; 
@@ -670,10 +617,10 @@ function openModal(title, contentDetails) {
 
     const donutDataValues = [correctCount, incorrectCount, unansweredCount];
     const donutLabels = ['Correct', 'Incorrect', 'Unanswered'];
-    const donutColors = ['#4caf50', '#f44336', '#9e9e9e']; // Green, Red, Grey
+    const donutColors = ['#4caf50', '#f44336', '#9e9e9e']; 
 
     const donutCtx = document.getElementById('modalDonutChart')?.getContext('2d');
-    if (donutCtx && (totalAttempted > 0 || unansweredCount > 0)) { // Only show chart if there's any data
+    if (donutCtx && (totalAttempted > 0 || unansweredCount > 0)) { 
         modalDonutChartInstance = new Chart(donutCtx, {
             type: 'doughnut',
             data: {
@@ -682,21 +629,19 @@ function openModal(title, contentDetails) {
             },
             options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } }, cutout: '50%' }
         });
-    } else if (donutCtx) { // Hide canvas if no data
+    } else if (donutCtx) { 
         donutCtx.canvas.style.display = 'none'; 
         donutCtx.canvas.parentNode.innerHTML += '<p class="text-gray-500 text-center text-sm mt-4">No data for donut chart.</p>';
     }
 
-    // Line Chart (e.g., Question-wise scores for this assessment) - Still dummy for now
     const lineCtx = document.getElementById('modalLineChart')?.getContext('2d');
     if (lineCtx) { 
         modalLineChartInstance = new Chart(lineCtx, {
             type: 'line',
             data: {
-                labels: Array.from({length: Math.min(assessmentQuestions.length, 10)}, (_,i) => `Q${assessmentQuestions[i].QuestionSequenceInQuiz || (i+1)}`), // Limit to 10 questions for sample
+                labels: Array.from({length: Math.min(assessmentQuestions.length, 10)}, (_,i) => `Q${assessmentQuestions[i].QuestionSequenceInQuiz || (i+1)}`), 
                 datasets: [
                     { label: 'Your Score', data: assessmentQuestions.slice(0,10).map(q => (parseFloat(q.PointsEarned) / parseFloat(q.PointsPossible_Question || 1)) * 100), borderColor: '#2a5266', tension: 0.1, fill: false },
-                    // Class average for individual questions not yet in data pipeline
                     { label: 'Class Avg', data: Array.from({length: Math.min(assessmentQuestions.length, 10)},()=>75+Math.random()*10), borderColor: '#757575', borderDash:[5,5], tension: 0.1, fill: false }
                 ]
             },
@@ -716,6 +661,48 @@ function closeModal() {
     if (modalLineChartInstance) modalLineChartInstance.destroy(); 
 }
 
+// Global modal window close handler
 window.onclick = function(event) { 
     if (event.target == modal) closeModal(); 
 }
+
+
+// --- MAIN INITIALIZATION ENTRY POINT ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Assign global DOM elements once the DOM is fully loaded
+    studentIdInputContainerEl = document.getElementById('student-id-input-container');
+    studentIdInputEl = document.getElementById('studentIdInput');
+    loadDataButtonEl = document.getElementById('loadDataButton');
+    idInputErrorEl = document.getElementById('id-input-error');
+    loadingMessageEl = document.getElementById('loading-message');
+    errorMessageEl = document.getElementById('error-message');
+    noDataMessageEl = document.getElementById('no-data-message');
+    dashboardRootContainerEl = document.getElementById('main-dashboard-content');
+    dashboardStudentNameEl = document.getElementById('dashboard-student-name');
+    changeIdButtonEl = document.getElementById('changeIdButton');
+    retryIdButtonEl = document.getElementById('retryIdButton');
+    overviewCardsContainerEl = document.getElementById('overview-cards-container');
+    scoreTrendChartEl = document.getElementById('scoreTrendChart');
+    skillPerformanceChartEl = document.getElementById('overallSkillChart');
+    strengthsListEl = document.getElementById('strengths-list');
+    weaknessesListEl = document.getElementById('weaknesses-list');
+    practiceTestsTableBodyEl = document.getElementById('practiceTests-table-body');
+    currentYearEl = document.getElementById('currentYear');
+    tabButtons = document.querySelectorAll('.tab-button');
+    tabPanes = document.querySelectorAll('.tab-pane');
+    hamburgerButton = document.getElementById('hamburgerButton');
+    mobileMenu = document.getElementById('mobileMenu');
+    mobileChangeIdLink = document.getElementById('mobileChangeIdLink');
+    modal = document.getElementById('detailModal'); // Assign global modal element
+    modalQuestionDetailsContainer = document.getElementById('modalQuestionDetails'); // Assign global modal Q&A container
+
+
+    // Set current year in footer
+    if(currentYearEl) currentYearEl.textContent = new Date().getFullYear();
+
+    // Setup event listeners for tabs and mobile nav
+    // This calls checkStudentLogin() to start the entire process.
+    setupEventListeners(); // This now calls checkStudentLogin() internally on load
+});
+
+// The actual call to start the process on DOMContentLoaded is handled by setupEventListeners() -> checkStudentLogin()
