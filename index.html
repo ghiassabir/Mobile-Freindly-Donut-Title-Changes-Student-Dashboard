@@ -14,11 +14,12 @@
     <header class="sathub-header p-4 shadow-md">
         <div class="container mx-auto flex flex-wrap items-center justify-between">
             <div class="flex items-center">
-                <img src="assets/logo.png" alt="The SAT Hub Logo" class="h-12 md:h-16 w-auto mr-2 md:mr-3 rounded-md"> 
+                <img src="YOUR_HOSTED_LOGO_URL_HERE" alt="The SAT Hub Logo" class="h-12 md:h-16 w-auto mr-2 md:mr-3 rounded-md"> 
                 <h1 class="sathub-header-title text-xl md:text-2xl font-bold">Analytics Hub</h1>
             </div>
             <div class="flex items-center space-x-4">
-                <span id="studentNameDisplay" class="text-sm hidden sm:block">Welcome, Alex Johnson!</span>
+                <span id="studentNameDisplay" class="text-sm hidden sm:block">Welcome!</span>
+                <button id="logoutButton" class="text-sm text-f0f0f0 hover:text-white hidden">Logout</button>
                 <button id="hamburgerButton" class="md:hidden text-f0f0f0 focus:outline-none">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
@@ -42,6 +43,7 @@
             <a href="#" data-main-tab="reading" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100">Reading</a>
             <a href="#" data-main-tab="writing" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100">Writing & Language</a>
             <a href="#" data-main-tab="math" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100">Math</a>
+            <a href="#" id="mobileLogoutLink" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100 hidden">Logout</a>
         </div>
     </nav>
 
@@ -53,28 +55,28 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
                         <div class="score-card"> 
                             <h3 class="text-md font-medium text-gray-600">Latest Total Score</h3>
-                            <p class="text-3xl font-bold score-value">1250 <span class="text-lg text-gray-500">/ 1600</span></p>
-                            <p class="text-sm text-gray-500 mt-1">Class Avg: 1180</p>
+                            <p class="text-3xl font-bold score-value" id="latestTotalScore">- <span class="text-lg text-gray-500">/ 1600</span></p>
+                            <p class="text-sm text-gray-500 mt-1" id="classAvgTotalScore">Class Avg: -</p>
                         </div>
                         <div class="score-card">
                             <h3 class="text-md font-medium text-gray-600">Latest R&W Score</h3>
-                            <p class="text-3xl font-bold score-value">620 <span class="text-lg text-gray-500">/ 800</span></p>
-                            <p class="text-sm text-gray-500 mt-1">Class Avg: 590</p>
+                            <p class="text-3xl font-bold score-value" id="latestRWScore">- <span class="text-lg text-gray-500">/ 800</span></p>
+                            <p class="text-sm text-gray-500 mt-1" id="classAvgRWScore">Class Avg: -</p>
                         </div>
                         <div class="score-card">
                             <h3 class="text-md font-medium text-gray-600">Latest Math Score</h3>
-                            <p class="text-3xl font-bold score-value">630 <span class="text-lg text-gray-500">/ 800</span></p>
-                            <p class="text-sm text-gray-500 mt-1">Class Avg: 590</p>
+                            <p class="text-3xl font-bold score-value" id="latestMathScore">- <span class="text-lg text-gray-500">/ 800</span></p>
+                            <p class="text-sm text-gray-500 mt-1" id="classAvgMathScore">Class Avg: -</p>
                         </div>
                         <div class="score-card">
-                            <h3 class="text-md font-medium text-gray-600">Avg EOC Practice Score</h3>
-                            <p class="text-3xl font-bold score-value">78%</p>
-                            <p class="text-sm text-gray-500 mt-1">Class Avg: 75%</p>
+                            <h3 class="text-md font-medium text-gray-600">Avg EOC/Khan Score</h3>
+                            <p class="text-3xl font-bold score-value" id="avgEocKhanScore">-</p>
+                            <p class="text-sm text-gray-500 mt-1" id="classAvgEocKhanScore">Class Avg: -</p>
                         </div>
                          <div class="score-card">
                             <h3 class="text-md font-medium text-gray-600">Your Target Score</h3>
-                            <p class="text-3xl font-bold" style="color: #8a3ffc;">1400</p> 
-                            <p class="text-sm text-gray-500 mt-1">Goal: +150 points</p>
+                            <p class="text-3xl font-bold" id="targetScore" style="color: #8a3ffc;">-</p> 
+                            <p class="text-sm text-gray-500 mt-1" id="targetScoreDifference">Goal: -</p>
                         </div>
                     </div>
                 </div>
@@ -92,7 +94,7 @@
             <section class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                 <div class="themed-card"><div class="themed-card-title-strip">Identified Strengths</div><div class="themed-card-body"><ul id="overviewStrengthsList" class="list-disc list-inside space-y-1 text-gray-600"></ul></div></div>
                 <div class="themed-card"><div class="themed-card-title-strip">Areas for Improvement</div><div class="themed-card-body"><ul id="overviewImprovementsList" class="list-disc list-inside space-y-1 text-gray-600"></ul></div></div>
-                <div class="themed-card"><div class="themed-card-title-strip">Time Spent (Portal Usage)</div><div class="themed-card-body" id="timeSpentOverview"><p class="text-gray-600">Your Avg: <span class="font-semibold">120 min / day</span></p><p class="text-gray-600">Class Avg: <span class="font-semibold">130 min / day</span></p></div></div>
+                <div class="themed-card"><div class="themed-card-title-strip">Time Spent (Portal Usage)</div><div class="themed-card-body" id="timeSpentOverview"><p class="text-gray-600">Your Avg: <span class="font-semibold">-</span></p><p class="text-gray-600">Class Avg: <span class="font-semibold">-</span></p></div></div>
             </section>
         </div>
 
@@ -122,7 +124,7 @@
 
     <footer class="bg-gray-100 border-t border-gray-200 mt-8">
         <div class="container mx-auto py-4 px-6 text-center text-gray-600 text-sm">
-            &copy; <span id="currentYear"></span> The SAT Hub. All Rights Reserved.
+            © <span id="currentYear"></span> The SAT Hub. All Rights Reserved.
         </div>
     </footer>
 
@@ -130,7 +132,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle" class="text-xl font-semibold">Detailed View</h2>
-                <span class="close-button" onclick="closeModal()">&times;</span>
+                <span class="close-button" onclick="closeModal()">×</span>
             </div>
             <div id="modalBody" class="modal-body-content space-y-4">
                 <p class="font-semibold">Question-wise Details:</p>
@@ -139,6 +141,21 @@
                     <div><p class="font-semibold text-center">Question Analysis (Sample)</p><canvas id="modalDonutChart" height="180"></canvas></div>
                     <div><p class="font-semibold text-center">Your Score Trend (Sample)</p><canvas id="modalLineChart" height="180"></canvas></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login/Student Selector Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-xl font-semibold">Welcome to Analytics Hub!</h2>
+            </div>
+            <div class="modal-body-content space-y-4">
+                <p class="text-gray-700">Please enter your registered Gmail ID to view your personalized dashboard:</p>
+                <input type="email" id="studentEmailInput" placeholder="your.email@example.pk" class="w-full p-2 border border-gray-300 rounded-md">
+                <p id="loginError" class="text-red-600 text-sm hidden">Invalid Email. Please try again.</p>
+                <button id="loginButton" class="sathub-accent-bg text-white px-4 py-2 rounded-md hover:opacity-90">View Dashboard</button>
             </div>
         </div>
     </div>
