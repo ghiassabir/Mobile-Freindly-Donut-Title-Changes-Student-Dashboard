@@ -3,22 +3,21 @@ const AGGREGATED_SCORES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PAC
 const QUESTION_DETAILS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSySYBO9YL3N4aUG3JEYZMQQIv9d1oSm3ba4Ty9Gt4SsGs2zmTS_k81rH3Qv41mZvClnayNcDpl_QbI/pub?gid=822014112&single=true&output=csv'; 
 const STUDENT_IDENTIFIER_KEY = 'satHubStudentEmail'; // Key for local storage
 
-// --- Dummy Data (removed as data will be fetched) ---
-let currentStudentData = {}; // Will be populated from fetched data
-let allAggregatedData = []; // Store all fetched aggregated data
-let allQuestionDetailsData = []; // Store all fetched question details
+// --- Global Data Storage ---
+let currentStudentData = {}; // Data for the currently logged-in student
+let allAggregatedData = []; // Stores ALL fetched aggregated data once
+let allQuestionDetailsData = []; // Stores ALL fetched question details data once
 
 // --- Date Formatting Helper ---
 function formatDate(dateString) { // Assumes input like "YYYY-MM-DD"
     if (!dateString || dateString === "N/A" || dateString === "Not Attempted") return dateString;
     try {
-        const date = new Date(dateString + 'T00:00:00'); // Ensure parsing as local date
-        const day = date.getDate();
-        const month = date.toLocaleString('default', { month: 'short' });
-        const year = date.getFullYear();
-        return `${day} ${month}, ${year}`;
+        // Parse date explicitly as UTC to avoid timezone issues during display, then format to local string
+        const date = new Date(dateString + 'T00:00:00Z'); 
+        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options); // Example: "1 Jan, 2024"
     } catch (e) {
-        console.warn("Could not format date:", dateString);
+        console.warn("Could not format date:", dateString, e);
         return dateString; // Return original if formatting fails
     }
 }
@@ -31,7 +30,7 @@ let modalLineChartInstance = null;
 
 document.addEventListener('DOMContentLoaded', function () {
     setupEventListeners();
-    checkStudentLogin(); // New login check
+    checkStudentLogin(); // New login check on page load
 });
 
 function setupEventListeners() {
@@ -40,10 +39,10 @@ function setupEventListeners() {
     const hamburgerButton = document.getElementById('hamburgerButton');
     const mobileMenu = document.getElementById('mobileMenu');
     const mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
-    const logoutButton = document.getElementById('logoutButton'); // New logout button
-    const mobileLogoutLink = document.getElementById('mobileLogoutLink'); // New mobile logout link
-    const loginButton = document.getElementById('loginButton'); // New login button
-    const studentEmailInput = document.getElementById('studentEmailInput'); // New email input
+    const logoutButton = document.getElementById('logoutButton'); 
+    const mobileLogoutLink = document.getElementById('mobileLogoutLink'); 
+    const loginButton = document.getElementById('loginButton'); 
+    const studentEmailInput = document.getElementById('studentEmailInput'); 
     
     document.getElementById('currentYear').textContent = new Date().getFullYear();
 
@@ -71,9 +70,11 @@ function setupEventListeners() {
         if (targetElement) {
             targetElement.classList.remove('hidden');
         }
-        if (targetContentId === 'overview-content') {
+        // Only initialize charts if the overview tab is selected
+        if (targetTabName === 'overview') {
             initializeOverviewCharts(currentStudentData); 
         }
+        // Auto-click first sub-tab when main tab switches
         const firstSubTab = document.querySelector(`#${targetContentId} .sub-tab-button`);
         if (firstSubTab) {
             firstSubTab.click(); 
@@ -105,15 +106,16 @@ function setupEventListeners() {
         });
     });
     
-    // Initial tab selection
-    if (mainTabs.length > 0) {
-        const firstDesktopTab = document.querySelector('.main-tab-button[data-main-tab="overview"]');
-        if (firstDesktopTab) {
-            switchTab(firstDesktopTab);
-        }
-    }
+    // Auto-select initial tab (Overview) after data loads
+    // This will be called explicitly after login in checkStudentLogin()
+    // if (mainTabs.length > 0) {
+    //     const firstDesktopTab = document.querySelector('.main-tab-button[data-main-tab="overview"]');
+    //     if (firstDesktopTab) {
+    //         switchTab(firstDesktopTab);
+    //     }
+    // }
 
-    // New Login/Logout Event Listeners
+    // Login/Logout Event Listeners
     if (loginButton) {
         loginButton.addEventListener('click', handleLogin);
         studentEmailInput.addEventListener('keypress', function(e) {
@@ -135,30 +137,28 @@ function setupEventListeners() {
 function checkStudentLogin() {
     const studentEmail = localStorage.getItem(STUDENT_IDENTIFIER_KEY);
     const loginModal = document.getElementById('loginModal');
-    const studentEmailInput = document.getElementById('studentEmailInput');
-    const studentNameDisplay = document.getElementById('studentNameDisplay');
-    const logoutButton = document.getElementById('logoutButton');
-    const mobileLogoutLink = document.getElementById('mobileLogoutLink');
+    const mainDashboardContent = document.getElementById('main-dashboard-content');
+    const studentEmailInput = document.getElementById('studentEmailInput'); // Get reference for clearing
 
     if (studentEmail) {
         studentEmailInput.value = studentEmail; // Pre-fill email if exists
-        studentNameDisplay.textContent = `Welcome, ${studentEmail.split('@')[0].split('.')[0]}!`; // Basic name from email
-        logoutButton.classList.remove('hidden');
-        mobileLogoutLink.classList.remove('hidden');
         loginModal.style.display = 'none'; // Hide login modal
+        mainDashboardContent.classList.remove('hidden'); // Show dashboard content
+        toggleHeaderButtons(true); // Show logout, hide welcome message on small screens
         loadAndDisplayData(studentEmail); // Load data for this student
     } else {
         loginModal.style.display = 'block'; // Show login modal
-        logoutButton.classList.add('hidden');
-        mobileLogoutLink.classList.add('hidden');
-        studentNameDisplay.textContent = `Welcome!`; // Reset display
+        mainDashboardContent.classList.add('hidden'); // Hide dashboard content
+        toggleHeaderButtons(false); // Hide logout, show welcome message on small screens
+        studentEmailInput.value = ''; // Clear input on fresh load
+        document.getElementById('loginError').classList.add('hidden'); // Hide any previous error
     }
 }
 
 async function handleLogin() {
     const studentEmailInput = document.getElementById('studentEmailInput');
     const loginError = document.getElementById('loginError');
-    const studentEmail = studentEmailInput.value.trim().toLowerCase(); // Normalize email
+    const studentEmail = studentEmailInput.value.trim().toLowerCase(); // Normalize email for lookup
 
     if (!studentEmail || !studentEmail.includes('@') || !studentEmail.includes('.')) {
         loginError.textContent = "Please enter a valid email address.";
@@ -166,55 +166,77 @@ async function handleLogin() {
         return;
     }
 
-    // --- IMPORTANT: Validate studentEmail against your known student IDs ---
-    // This is a crucial step. For now, we'll fetch ALL data and check if this email exists.
-    // In a real system, you might have an API endpoint to validate credentials.
-
+    // Fetch all data for validation and filtering
     try {
         allAggregatedData = await fetchCsvData(AGGREGATED_SCORES_CSV_URL);
         allQuestionDetailsData = await fetchCsvData(QUESTION_DETAILS_CSV_URL);
 
-        const studentExistsInAggregated = allAggregatedData.some(row => row.StudentGmailID === studentEmail);
-        const studentExistsInQDetails = allQuestionDetailsData.some(row => row.StudentGmailID === studentEmail);
+        // Check if student exists in either dataset
+        const studentExists = allAggregatedData.some(row => row.StudentGmailID === studentEmail) ||
+                             allQuestionDetailsData.some(row => row.StudentGmailID === studentEmail);
 
-        if (studentExistsInAggregated || studentExistsInQDetails) {
+        if (studentExists) {
             localStorage.setItem(STUDENT_IDENTIFIER_KEY, studentEmail);
             loginError.classList.add('hidden');
             document.getElementById('loginModal').style.display = 'none';
-            checkStudentLogin(); // Reload dashboard for this student
+            document.getElementById('main-dashboard-content').classList.remove('hidden'); // Show dashboard
+            toggleHeaderButtons(true); // Show logout
+            loadAndDisplayData(studentEmail); // Load data for this identified student
+
+            // Activate Overview tab after data loads
+            const firstDesktopTab = document.querySelector('.main-tab-button[data-main-tab="overview"]');
+            if (firstDesktopTab) {
+                firstDesktopTab.click(); // Programmatically click to activate and initialize charts
+            }
         } else {
             loginError.textContent = "Email not found in our records. Please check and try again.";
             loginError.classList.remove('hidden');
         }
     } catch (error) {
         console.error("Error during login data fetch:", error);
-        loginError.textContent = "Could not fetch data. Please try again later.";
+        loginError.textContent = "Could not fetch data. Please try again later. (Check published CSV URLs)";
         loginError.classList.remove('hidden');
     }
 }
 
 function handleLogout() {
     localStorage.removeItem(STUDENT_IDENTIFIER_KEY);
-    window.location.reload(); // Reloads the page, triggering login modal
+    window.location.reload(); // Reloads the page, triggering checkStudentLogin() and showing login modal
+}
+
+function toggleHeaderButtons(loggedIn) {
+    const studentNameDisplay = document.getElementById('studentNameDisplay');
+    const logoutButton = document.getElementById('logoutButton');
+    const mobileLogoutLink = document.getElementById('mobileLogoutLink');
+
+    if (loggedIn) {
+        studentNameDisplay.classList.remove('hidden');
+        logoutButton.classList.remove('hidden');
+        mobileLogoutLink.classList.remove('hidden');
+    } else {
+        studentNameDisplay.classList.add('hidden');
+        logoutButton.classList.add('hidden');
+        mobileLogoutLink.classList.add('hidden');
+    }
 }
 
 
-// Modified loadAndDisplayData to accept studentEmail
 async function loadAndDisplayData(studentEmail) {
     if (!studentEmail) {
         console.error("No student email provided to load data.");
         return;
     }
 
-    // Ensure all data is fetched once per session if not already
+    // Fetch all data once per session if not already
     if (allAggregatedData.length === 0 || allQuestionDetailsData.length === 0) {
         try {
             allAggregatedData = await fetchCsvData(AGGREGATED_SCORES_CSV_URL);
             allQuestionDetailsData = await fetchCsvData(QUESTION_DETAILS_CSV_URL);
         } catch (error) {
             console.error("Failed to load all CSV data:", error);
-            // Display an error message to the user on the dashboard
-            document.getElementById('main').innerHTML = '<p class="text-red-600 text-center p-8">Failed to load dashboard data. Please try refreshing or contact support.</p>';
+            document.getElementById('main-dashboard-content').innerHTML = '<p class="text-red-600 text-center p-8">Failed to load dashboard data. Please check published CSV URLs and network connection.</p>';
+            document.getElementById('main-dashboard-content').classList.remove('hidden'); // Show error to user
+            toggleHeaderButtons(false); // Hide logout if data failed
             return;
         }
     }
@@ -224,47 +246,53 @@ async function loadAndDisplayData(studentEmail) {
     const studentQuestionDetails = allQuestionDetailsData.filter(row => row.StudentGmailID === studentEmail);
     
     if (studentAggregatedData.length === 0 && studentQuestionDetails.length === 0) {
-        document.getElementById('main').innerHTML = `<p class="text-red-600 text-center p-8">No data found for ${studentEmail}.</p>`;
+        document.getElementById('main-dashboard-content').innerHTML = `<p class="text-red-600 text-center p-8">No performance data found for "${studentEmail}".</p>`;
+        document.getElementById('main-dashboard-content').classList.remove('hidden');
+        toggleHeaderButtons(true); // Show logout even if no data
         return;
     }
 
     // Transform filtered data into dashboard's structured format
+    // This is the core data mapping from flat CSV to your UI's expected object
     currentStudentData = transformDataForDashboard(studentAggregatedData, allAggregatedData, studentQuestionDetails, studentEmail);
 
     // Update Dashboard UI elements
-    const studentNamePart = studentEmail.split('@')[0].split('.')[0]; // Simple extraction
+    const studentNamePart = studentEmail.split('@')[0].split('.')[0]; 
     document.getElementById('studentNameDisplay').textContent = `Welcome, ${studentNamePart.charAt(0).toUpperCase() + studentNamePart.slice(1)}!`;
     
     // Populate Score Cards
-    document.getElementById('latestTotalScore').innerHTML = `${currentStudentData.latestScores.total} <span class="text-lg text-gray-500">/ 1600</span>`;
-    document.getElementById('latestRWScore').innerHTML = `${currentStudentData.latestScores.rw} <span class="text-lg text-gray-500">/ 800</span>`;
-    document.getElementById('latestMathScore').innerHTML = `${currentStudentData.latestScores.math} <span class="text-lg text-gray-500">/ 800</span>`;
-    document.getElementById('avgEocKhanScore').textContent = `${currentStudentData.latestScores.avgEocKhan}%`;
-    document.getElementById('targetScore').textContent = currentStudentData.targetScore;
-    document.getElementById('targetScoreDifference').textContent = `Goal: ${currentStudentData.targetScore - parseFloat(currentStudentData.latestScores.total)} points`;
+    document.getElementById('latestTotalScore').innerHTML = `${currentStudentData.latestScores.total || '-'} <span class="text-lg text-gray-500">/ 1600</span>`;
+    document.getElementById('latestRWScore').innerHTML = `${currentStudentData.latestScores.rw || '-'} <span class="text-lg text-gray-500">/ 800</span>`;
+    document.getElementById('latestMathScore').innerHTML = `${currentStudentData.latestScores.math || '-'} <span class="text-lg text-gray-500">/ 800</span>`;
+    document.getElementById('avgEocKhanScore').textContent = `${currentStudentData.latestScores.avgEocKhan || '-'}%`;
+    document.getElementById('targetScore').textContent = currentStudentData.targetScore || '-';
+    document.getElementById('targetScoreDifference').textContent = `Goal: ${currentStudentData.targetScore && currentStudentData.latestScores.total ? (currentStudentData.targetScore - parseFloat(currentStudentData.latestScores.total)) : '-'} points`;
 
     // Populate Class Averages for Score Cards
-    document.getElementById('classAvgTotalScore').textContent = `Class Avg: ${currentStudentData.classAveragesGlobal.total}`;
-    document.getElementById('classAvgRWScore').textContent = `Class Avg: ${currentStudentData.classAveragesGlobal.rw}`;
-    document.getElementById('classAvgMathScore').textContent = `Class Avg: ${currentStudentData.classAveragesGlobal.math}`;
-    document.getElementById('classAvgEocKhanScore').textContent = `Class Avg: ${currentStudentData.classAveragesGlobal.avgEocKhan}%`;
+    document.getElementById('classAvgTotalScore').textContent = `Class Avg: ${currentStudentData.classAveragesGlobal.total || '-'}`;
+    document.getElementById('classAvgRWScore').textContent = `Class Avg: ${currentStudentData.classAveragesGlobal.rw || '-'}`;
+    document.getElementById('classAvgMathScore').textContent = `Class Avg: ${currentStudentData.classAveragesGlobal.math || '-'}`;
+    document.getElementById('classAvgEocKhanScore').textContent = `Class Avg: ${currentStudentData.classAveragesGlobal.avgEocKhan || '-'}%`;
 
     // Populate other sections
     populateOverviewSnapshot(currentStudentData); 
     populatePracticeTestsTable(currentStudentData.cbPracticeTests);
     
     ['reading', 'writing', 'math'].forEach(subject => {
-        // Pass original eocChapters structure for full list, and filtered data
         populateEOCTable(subject, currentStudentData.eocQuizzes[subject]);
         populateKhanSection(subject, currentStudentData.khanAcademy[subject]);
         populateCBSkills(subject, currentStudentData.cbSkills[subject]);
     });
 
-    // Initialize charts AFTER all data is loaded and displayed
-    initializeOverviewCharts(currentStudentData); 
+    // Initial tab activation needs to happen after data is loaded
+    const firstDesktopTab = document.querySelector('.main-tab-button[data-main-tab="overview"]');
+    if (firstDesktopTab) {
+        firstDesktopTab.click(); // Programmatically click to activate and initialize charts
+    }
 }
 
 async function fetchCsvData(url) {
+    console.log("Attempting to fetch data from:", url);
     return new Promise((resolve, reject) => {
         PapaParse.parse(url, {
             download: true,
@@ -289,88 +317,97 @@ async function fetchCsvData(url) {
 // Function to transform flat CSV data into dashboard's structured format
 function transformDataForDashboard(studentAggregatedAssessments, allAggregatedData, studentQuestionDetails, studentEmail) {
     const student = { 
-        name: studentEmail, // Default name, try to update below
-        targetScore: 1400, // Hardcoded for now
+        name: studentEmail, 
+        targetScore: 1400, // This could eventually come from a student profile API
         latestScores: { total: "-", rw: "-", math: "-", avgEocKhan: "-" },
         classAveragesGlobal: { total: "-", rw: "-", math: "-", avgEocKhan: "-" }, 
         scoreTrend: { labels: [], studentScores: [], classAvgScores: [] },
         overallSkillPerformance: { labels: ['Reading', 'Writing & Language', 'Math'], studentAccuracy: [0,0,0], classAvgAccuracy: [0,0,0] },
         strengths: [], improvements: [],
-        timeSpent: { studentAvg: "N/A", studentUnit: "min / day", classAvg: "N/A", classUnit: "min / day"},
+        timeSpent: { studentAvg: "N/A", studentUnit: "", classAvg: "N/A", classUnit: ""},
         cbPracticeTests: [], eocQuizzes: { reading: [], writing: [], math: [] }, 
         khanAcademy: { reading: [], writing: [], math: [] }, cbSkills: { reading: [], writing: [], math: [] }
     };
 
-    // Attempt to get student's full name from aggregated data or mapping
-    const studentNameFromAgg = studentAggregatedAssessments.find(row => row.StudentGmailID === studentEmail)?.StudentName_Full; // Assuming Students_CanvasData might have full name if joined
-    if(studentNameFromAgg) student.name = studentNameFromAgg;
-    // Fallback: simple name from email
-    else {
+    // --- Student Name (Try to get actual name from a source if available) ---
+    // Assuming 'StudentName_Full' might be present in aggregated data rows (if joined from Students_CanvasData)
+    // Or, you'd need a separate mapping from studentEmail to full name.
+    const studentNameEntry = allAggregatedData.find(row => row.StudentGmailID === studentEmail && row.StudentName_Full);
+    if(studentNameEntry && studentNameEntry.StudentName_Full) {
+        student.name = studentNameEntry.StudentName_Full;
+    } else {
+        // Fallback: simple name from email
         const emailParts = studentEmail.split('@')[0].split('.');
         student.name = emailParts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
     }
 
 
-    // --- Global Class Averages (requires processing allAggregatedData) ---
-    const classAvgTotalScores = allAggregatedData.filter(a => a.AssessmentSource === 'Canvas CB Test' && a.Score_Scaled_Total);
-    if(classAvgTotalScores.length > 0) {
-        const totalSum = classAvgTotalScores.reduce((sum, a) => sum + parseFloat(a.Score_Scaled_Total), 0);
-        student.classAveragesGlobal.total = Math.round(totalSum / classAvgTotalScores.length);
-        const rwSum = classAvgTotalScores.reduce((sum, a) => sum + parseFloat(a.ScaledScore_RW || 0), 0);
-        student.classAveragesGlobal.rw = Math.round(rwSum / classAvgTotalScores.length);
-        const mathSum = classAvgTotalScores.reduce((sum, a) => sum + parseFloat(a.ScaledScore_Math || 0), 0);
-        student.classAveragesGlobal.math = Math.round(mathSum / classAvgTotalScores.length);
+    // --- Global Class Averages (Calculated from ALL data) ---
+    // This is simplified. In a real scenario, you'd calculate this once for the entire dataset
+    // independent of the current student's data. For this client-side dashboard,
+    // we aggregate across all data loaded via PapaParse.
+    
+    // For CB Tests (Total, RW, Math)
+    const allCBTests = allAggregatedData.filter(a => a.AssessmentSource === 'Canvas CB Test' && a.Score_Scaled_Total);
+    if(allCBTests.length > 0) {
+        const totalSum = allCBTests.reduce((sum, a) => sum + parseFloat(a.Score_Scaled_Total), 0);
+        student.classAveragesGlobal.total = Math.round(totalSum / allCBTests.length);
+        const rwSum = allCBTests.reduce((sum, a) => sum + parseFloat(a.ScaledScore_RW || 0), 0);
+        student.classAveragesGlobal.rw = Math.round(rwSum / allCBTests.length);
+        const mathSum = allCBTests.reduce((sum, a) => sum + parseFloat(a.ScaledScore_Math || 0), 0);
+        student.classAveragesGlobal.math = Math.round(mathSum / allCBTests.length);
     }
     
-    // Class average EOC/Khan needs aggregation across all students, similar logic
+    // For EOC/Khan Avg Pct
     const allEocKhanScores = allAggregatedData.filter(a => (a.AssessmentSource.includes('EOC') || a.AssessmentSource.includes('Khan')) && a.Score_Percentage);
     if (allEocKhanScores.length > 0) {
         const totalEocKhanPct = allEocKhanScores.reduce((sum, a) => sum + parseFloat(a.Score_Percentage.replace('%','')), 0);
         student.classAveragesGlobal.avgEocKhan = Math.round(totalEocKhanPct / allEocKhanScores.length);
     }
 
-    // --- Student Specific Data ---
+    // --- Student Specific Data (Filtered Data) ---
 
-    // Filter to only 'Canvas CB Test' rows for overall latest scores
-    const latestCBTests = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Canvas CB Test' && a.Score_Scaled_Total);
-    if (latestCBTests.length > 0) {
-        latestCBTests.sort((a,b) => new Date(b.AttemptDate) - new Date(a.AttemptDate)); // Latest first
-        const latestTest = latestCBTests[0];
+    // Latest Scores (Overall Dashboard Snapshot)
+    const studentLatestCBTests = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Canvas CB Test' && a.Score_Scaled_Total);
+    if (studentLatestCBTests.length > 0) {
+        studentLatestCBTests.sort((a,b) => new Date(b.AttemptDate) - new Date(a.AttemptDate)); // Latest first
+        const latestTest = studentLatestCBTests[0];
         student.latestScores.total = parseFloat(latestTest.Score_Scaled_Total);
         student.latestScores.rw = parseFloat(latestTest.ScaledScore_RW);
         student.latestScores.math = parseFloat(latestTest.ScaledScore_Math);
-        student.targetScoreDifference.textContent = `Goal: ${student.targetScore - student.latestScores.total} points`; // Calculate diff
     }
 
-    // Aggregate EOC/Khan percentages for student's avgEocKhanScore
-    const studentEocKhanScores = studentAggregatedAssessments.filter(a => (a.AssessmentSource.includes('EOC') || a.AssessmentSource.includes('Khan')) && a.Score_Percentage);
-    if (studentEocKhanScores.length > 0) {
-        const totalStudentEocKhanPct = studentEocKhanScores.reduce((sum, a) => sum + parseFloat(a.Score_Percentage.replace('%','')), 0);
-        student.latestScores.avgEocKhan = Math.round(totalStudentEocKhanPct / studentEocKhanScores.length);
+    const studentEocKhanAvgScores = studentAggregatedAssessments.filter(a => (a.AssessmentSource.includes('EOC') || a.AssessmentSource.includes('Khan')) && a.Score_Percentage);
+    if (studentEocKhanAvgScores.length > 0) {
+        const totalStudentEocKhanPct = studentEocKhanAvgScores.reduce((sum, a) => sum + parseFloat(a.Score_Percentage.replace('%','')), 0);
+        student.latestScores.avgEocKhan = Math.round(totalStudentEocKhanPct / studentEocKhanAvgScores.length);
     }
 
 
-    // Populate cbPracticeTests and scoreTrend
+    // CB Practice Tests Table & Score Trend Chart Data
+    // Include both "Canvas CB Test" (aggregate) and "Canvas CB Module" rows
     student.cbPracticeTests = studentAggregatedAssessments.filter(a => a.AssessmentSource.includes('CB Test') || a.AssessmentSource.includes('CB Module'))
         .map(a => ({
             name: a.AssessmentName,
             date: a.AttemptDate,
+            // Prioritize scaled scores for tests, raw scores for modules, else '-'
             rw: a.ScaledScore_RW || (a.AssessmentSource.includes('CB Module') ? a.Score_Raw_Combined : '-'), 
             math: a.ScaledScore_Math || (a.AssessmentSource.includes('CB Module') ? a.Score_Raw_Combined : '-'),
             total: a.Score_Scaled_Total || (a.AssessmentSource.includes('CB Module') ? a.Score_Raw_Combined : '-'),
-            classAvgRW: "(N/A)", 
-            classAvgMath: "(N/A)",
-            classAvgTotal: "(N/A)"
+            classAvgRW: student.classAveragesGlobal.rw, // Use global class average for now
+            classAvgMath: student.classAveragesGlobal.math,
+            classAvgTotal: student.classAveragesGlobal.total
         }))
-        .sort((a,b) => new Date(a.date) - new Date(b.date)); // Sort ascending by date for trend
+        .sort((a,b) => new Date(a.date) - new Date(b.date)); // Sort ascending by date for trend chart
 
-    student.scoreTrend.labels = student.cbPracticeTests.map(t => t.name);
-    student.scoreTrend.studentScores = student.cbPracticeTests.map(t => parseFloat(t.total) || 0);
-    // Placeholder for classAvgScores in trend chart, would need full class data
-    student.scoreTrend.classAvgScores = student.scoreTrend.labels.map(() => student.classAveragesGlobal.total); // Use global average for all points
+    // Filter score trend to only include aggregate CB Tests for cleaner chart
+    const trendTests = student.cbPracticeTests.filter(t => t.total !== '-' && t.name.includes('CB-T'));
+    student.scoreTrend.labels = trendTests.map(t => t.name.replace('CB-T','Test ')); // Simplify names for labels
+    student.scoreTrend.studentScores = trendTests.map(t => parseFloat(t.total) || 0);
+    student.scoreTrend.classAvgScores = student.scoreTrend.labels.map(() => student.classAveragesGlobal.total); // Repeat global average for all points
 
 
-    // Populate eocQuizzes
+    // EOC Quizzes
     const eocSubjects = { reading: 'R-EOC', writing: 'W-EOC', math: 'M-EOC' };
     Object.keys(eocSubjects).forEach(subjectKey => {
         student.eocQuizzes[subjectKey] = studentAggregatedAssessments.filter(a => 
@@ -379,11 +416,11 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
                 name: a.AssessmentName, 
                 latestScore: a.Score_Percentage || `${a.Score_Raw_Combined}/${a.PointsPossible_Combined}`, 
                 date: a.AttemptDate, 
-                classAvg: "(N/A)" // Requires class avg per EOC quiz
+                classAvg: student.classAveragesGlobal.avgEocKhan // Placeholder, needs per-quiz class avg
             }));
     });
 
-    // Populate khanAcademy
+    // Khan Academy
     const khanSubjects = { reading: 'Reading', writing: 'Writing', math: 'Math' };
     Object.keys(khanSubjects).forEach(subjectKey => {
         student.khanAcademy[subjectKey] = studentAggregatedAssessments.filter(a => 
@@ -393,42 +430,56 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
                 date: a.AttemptDate, 
                 score: a.Score_Percentage || `${a.Score_Raw_Combined}/${a.PointsPossible_Combined}`, 
                 pointsPossible: a.PointsPossible_Combined, 
-                classAvg: "(N/A)" // Requires class avg per Khan assignment
+                classAvg: student.classAveragesGlobal.avgEocKhan // Placeholder, needs per-assignment class avg
             }));
     });
     
-    // Populate cbSkills (Overall Skill Performance)
-    // This needs to aggregate from studentQuestionDetails
+    // CB Skills (Overall Skill Performance & Strengths/Improvements)
     const skillCategories = [
-        { key: 'Reading', filter: q => q.SAT_Skill_Tag.includes('Reading'), index: 0 },
-        { key: 'Writing & Language', filter: q => q.SAT_Skill_Tag.includes('Writing'), index: 1 },
-        { key: 'Math', filter: q => q.SAT_Skill_Tag.includes('Math'), index: 2 }
+        { key: 'reading', tagPrefix: 'Reading', label: 'Reading' },
+        { key: 'writing', tagPrefix: 'Writing', label: 'Writing & Language' },
+        { key: 'math', tagPrefix: 'Math', label: 'Math' }
     ];
 
-    skillCategories.forEach(category => {
-        const categoryQuestions = studentQuestionDetails.filter(category.filter);
+    skillCategories.forEach((category, index) => {
+        const categoryQuestions = studentQuestionDetails.filter(q => 
+            q.SAT_Skill_Tag && q.SAT_Skill_Tag.includes(category.tagPrefix)
+        );
         const studentAccuracy = calculateAverageCorrectness(categoryQuestions);
-        student.overallSkillPerformance.studentAccuracy[category.index] = studentAccuracy;
-        // Class Avg Accuracy for skills needs full class data
-        student.overallSkillPerformance.classAvgAccuracy[category.index] = student.classAveragesGlobal.avgEocKhan; // Placeholder with overall avg
+        student.overallSkillPerformance.studentAccuracy[index] = studentAccuracy;
+        student.overallSkillPerformance.labels[index] = category.label; // Ensure labels are consistent
         
-        // Detailed skills in cbSkills tabs (using top-level skill name from SAT_Skill_Tag for simplicity)
-        const uniqueSkillsInCat = [...new Set(categoryQuestions.map(q => q.SAT_Skill_Tag))].filter(s => s !== 'TBD');
-        student.cbSkills[category.key.toLowerCase().replace(/ & /g, '_')] = uniqueSkillsInCat.map(skillName => {
-            const skillQuestions = categoryQuestions.filter(q => q.SAT_Skill_Tag === skillName);
-            const skillAccuracy = calculateAverageCorrectness(skillQuestions);
-            return { name: skillName, score: skillAccuracy, classAvg: "(N/A)" }; // Class avg per skill needs full data
-        }).sort((a,b) => b.score - a.score); // Sort by score descending
+        // Detailed skills in cbSkills tabs
+        // Aggregate by distinct SAT_Skill_Tag for these tabs
+        const uniqueSkillsMap = {}; // { 'Skill Name': { totalCorrect: X, totalAttempted: Y } }
+        categoryQuestions.forEach(q => {
+            if (q.SAT_Skill_Tag && q.SAT_Skill_Tag !== 'TBD') {
+                if (!uniqueSkillsMap[q.SAT_Skill_Tag]) {
+                    uniqueSkillsMap[q.SAT_Skill_Tag] = { totalCorrect: 0, totalAttempted: 0 };
+                }
+                uniqueSkillsMap[q.SAT_Skill_Tag].totalAttempted++;
+                if (String(q.IsCorrect).toUpperCase() === 'TRUE') {
+                    uniqueSkillsMap[q.SAT_Skill_Tag].totalCorrect++;
+                }
+            }
+        });
+
+        student.cbSkills[category.key] = Object.entries(uniqueSkillsMap).map(([skillName, data]) => ({
+            name: skillName,
+            score: Math.round((data.totalCorrect / data.totalAttempted) * 100),
+            classAvg: student.classAveragesGlobal.avgEocKhan // Placeholder, needs per-skill class avg
+        })).sort((a,b) => b.score - a.score); // Sort by score descending
     });
 
-    // Populate strengths/improvements based on detailed skill scores (example)
+    // Strengths/Improvements based on detailed skill scores
     const allStudentDetailedSkills = Object.values(student.cbSkills).flatMap(arr => arr);
     student.strengths = allStudentDetailedSkills.filter(s => s.score >= 80).map(s => `${s.name} (${s.score}%)`).slice(0,3);
     student.improvements = allStudentDetailedSkills.filter(s => s.score < 60).map(s => `${s.name} (${s.score}%)`).slice(0,3);
 
 
     // Time Spent (placeholder until activity data is detailed)
-    student.timeSpent = { studentAvg: "N/A", studentUnit: "", classAvg: "N/A", classUnit: ""}; // Reset, actual calculation is complex
+    // You'd calculate this from Engagement_CanvasAggregated data.
+    student.timeSpent = { studentAvg: "N/A", studentUnit: "", classAvg: "N/A", classUnit: ""}; 
 
     return student;
 }
@@ -437,7 +488,10 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
 function calculateAverageCorrectness(questionItems) {
     if (questionItems.length === 0) return 0;
     const correctCount = questionItems.filter(q => String(q.IsCorrect).toUpperCase() === 'TRUE').length;
-    return Math.round((correctCount / questionItems.length) * 100);
+    // For average accuracy, ensure only questions that were actually attempted are considered
+    const attemptedCount = questionItems.filter(q => q.StudentAnswer && q.StudentAnswer.trim() !== '').length; // Assuming an answer means attempted
+    if (attemptedCount === 0) return 0; // Avoid division by zero if no questions were attempted
+    return Math.round((correctCount / attemptedCount) * 100);
 }
 
 
@@ -445,7 +499,6 @@ function calculateAverageCorrectness(questionItems) {
 const CHART_PRIMARY_COLOR = '#2a5266'; 
 const CHART_SECONDARY_COLOR = '#757575'; 
 const CHART_PRIMARY_BG_BAR = 'rgba(42, 82, 102, 0.8)'; 
-const CHART_PRIMARY_BG_RADAR = 'rgba(42, 82, 102, 0.3)';
 
 function initializeOverviewCharts(studentData) {
     const chartOptions = { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: true, position: 'bottom' }}};
@@ -477,7 +530,7 @@ function initializeOverviewCharts(studentData) {
                 labels: studentData.overallSkillPerformance.labels, 
                 datasets: [
                     { label: 'Your Accuracy', data: studentData.overallSkillPerformance.studentAccuracy, backgroundColor: CHART_PRIMARY_BG_BAR },
-                    { label: 'Class Average Accuracy', data: studentData.overallSkillPerformance.classAvgAccuracy, backgroundColor: 'rgba(117, 117, 117, 0.7)' } // Consistent secondary BG
+                    { label: 'Class Average Accuracy', data: 'rgba(117, 117, 117, 0.7)' } // Consistent secondary BG
                 ] 
             }, 
             options: { ...chartOptions, scales: { y: { beginAtZero: true, max: 100 } } } 
@@ -508,7 +561,7 @@ function populateOverviewSnapshot(studentData) {
         (studentData.improvements || []).forEach(item => { const li = document.createElement('li'); li.textContent = item; overviewImprovementsList.appendChild(li); });
         if(studentData.improvements.length === 0) overviewImprovementsList.innerHTML = '<li class="text-gray-500">No areas for improvement identified yet.</li>';
     }
-    if(timeSpentOverviewDiv) { // Ensure timeSpent has data
+    if(timeSpentOverviewDiv) { 
         timeSpentOverviewDiv.innerHTML = `
             <p class="text-gray-600">Your Avg: <span class="font-semibold">${studentData.timeSpent.studentAvg || '-'} ${studentData.timeSpent.studentUnit || ''}</span></p>
             <p class="text-gray-600">Class Avg: <span class="font-semibold">${studentData.timeSpent.classAvg || '-'} ${studentData.timeSpent.classUnit || ''}</span></p>
