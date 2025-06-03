@@ -1,6 +1,6 @@
 // --- Constants for Data Files (Future Use) ---
-// const AGGREGATED_SCORES_CSV_URL = 'data/DashboardFeed_AggregatedScores.csv'; 
-// const QUESTION_DETAILS_CSV_URL = 'data/DashboardFeed_QuestionDetails.csv'; 
+const AGGREGATED_SCORES_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSySYBO9YL3N4aUG3JEYZMQQIv9d1oSm3ba4Ty9Gt4SsGs2zmTS_k81rH3Qv41mZvClnayNcDpl_QbI/pub?gid=1890969747&single=true&output=csv'; 
+const QUESTION_DETAILS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSySYBO9YL3N4aUG3JEYZMQQIv9d1oSm3ba4Ty9Gt4SsGs2zmTS_k81rH3Qv41mZvClnayNcDpl_QbI/pub?gid=822014112&single=true&output=csv'; 
 
 // --- Date Formatting Helper ---
 function formatDate(dateString) { // Assumes input like "YYYY-MM-DD"
@@ -146,27 +146,165 @@ function setupEventListeners() {
 }
 
 async function loadAndDisplayData() {
+    // Fetch Aggregated Scores
+    const aggregatedData = await fetchCsvData(AGGREGATED_SCORES_CSV_URL);
+    // Fetch Question Details
+    const questionDetailsData = await fetchCsvData(QUESTION_DETAILS_CSV_URL);
+
+    // --- Now process and display data for the specific student ---
+    // Identify the current student (e.g., from stored email, or URL parameter)
+    const studentEmail = "ali.khan@example.pk"; // Placeholder: replace with actual student identification logic
+                                               // You mentioned "first time students logs in he or she puts in his her emaiol and that is stored ingithub and therefaftye the students see shis data"
+                                               // This will be the key challenge: securely identifying the student.
+    
+    const studentAggregatedData = aggregatedData.filter(row => row.StudentGmailID === studentEmail);
+    const studentQuestionDetails = questionDetailsData.filter(row => row.StudentGmailID === studentEmail);
+
+    // Transform studentAggregatedData and studentQuestionDetails into the format currentStudentData expects
+    // This is where you'll map the flat CSV data to your structured `currentStudentData` object.
+    currentStudentData = transformDataForDashboard(studentAggregatedData, studentQuestionDetails, studentEmail);
+
     document.getElementById('studentNameDisplay').textContent = `Welcome, ${currentStudentData.name}!`;
     populateOverviewSnapshot(currentStudentData); 
     populatePracticeTestsTable(currentStudentData.cbPracticeTests);
     
     ['reading', 'writing', 'math'].forEach(subject => {
-        const studentEOCs = currentStudentData.eocQuizzes[subject] || [];
-        const allSubjectEOCs = (eocChapters[subject] || []).map(chapterName => {
-            const existing = studentEOCs.find(e => e.name === chapterName);
-            const populatedEOC = existing || { name: chapterName, latestScore: "N/A", classAvg: "N/A", date: "N/A" };
-            populatedEOC.date = formatDate(populatedEOC.date); // Format date here
-            return populatedEOC;
-        });
-
-        populateEOCTable(subject, allSubjectEOCs);
-        
-        const studentKhan = (currentStudentData.khanAcademy[subject] || []).map(item => ({...item, date: formatDate(item.date) }));
-        populateKhanSection(subject, studentKhan);
-        
-        const studentCBSkills = currentStudentData.cbSkills[subject] || [];
-        populateCBSkills(subject, studentCBSkills);
+        // ... (rest of your existing populating logic using currentStudentData) ...
+        // You'll need to adapt how eocQuizzes, khanAcademy, cbSkills are derived from `studentAggregatedData`
+        // and `studentQuestionDetails`.
     });
+    
+    // Initialize charts AFTER data is loaded
+    initializeOverviewCharts(currentStudentData); 
+}
+
+async function fetchCsvData(url) {
+    return new Promise((resolve, reject) => {
+        PapaParse.parse(url, {
+            download: true,
+            header: true, // Parse first row as headers
+            skipEmptyLines: true,
+            complete: function(results) {
+                console.log(`Fetched data from ${url}. Rows: ${results.data.length}`);
+                resolve(results.data);
+            },
+            error: function(err) {
+                console.error(`Error fetching CSV from ${url}:`, err);
+                reject(err);
+            }
+        });
+    });
+}
+
+// NEW: Function to transform flat CSV data into dashboard's structured format
+function transformDataForDashboard(aggregatedData, questionDetailsData, studentEmail) {
+    const student = { 
+        name: studentEmail, // Default name, update from aggregatedData if possible
+        targetScore: 1400, // Still hardcoded for now, or fetch from student mapping sheet (more complex)
+        latestScores: { total: "-", rw: "-", math: "-", avgEocKhan: "-" },
+        classAveragesGlobal: { total: "-", rw: "-", math: "-", avgEocKhan: "-" }, // Requires calculating class averages from full data
+        scoreTrend: { labels: [], studentScores: [], classAvgScores: [] },
+        overallSkillPerformance: { labels: ['Reading', 'Writing & Language', 'Math'], studentAccuracy: [], classAvgAccuracy: [] },
+        strengths: [], improvements: [],
+        timeSpent: { studentAvg: "-", studentUnit: "min / day", classAvg: "-", classUnit: "min / day"},
+        cbPracticeTests: [], eocQuizzes: { reading: [], writing: [], math: [] }, 
+        khanAcademy: { reading: [], writing: [], math: [] }, cbSkills: { reading: [], writing: [], math: [] }
+    };
+
+    // Populate student details and scores from aggregatedData
+    // This is a simplified example, you'll need robust logic here
+    const studentAggregatedAssessments = aggregatedData.filter(item => item.StudentGmailID === studentEmail);
+    if (studentAggregatedAssessments.length > 0) {
+        // Find the latest CB Test or overall latest score
+        const latestCBTest = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Canvas CB Test')
+                                            .sort((a,b) => new Date(b.AttemptDate) - new Date(a.AttemptDate))[0];
+        if (latestCBTest) {
+            student.latestScores.total = latestCBTest.Score_Scaled_Total || latestCBTest.Score_Raw_Combined;
+            student.latestScores.rw = latestCBTest.ScaledScore_RW;
+            student.latestScores.math = latestCBTest.ScaledScore_Math;
+        }
+        // Aggregate EOC/Khan percentages for avgEocKhan
+        const eocAndKhanScores = studentAggregatedAssessments.filter(a => a.AssessmentSource.includes('EOC') || a.AssessmentSource.includes('Khan'))
+                                                              .map(a => parseFloat(a.Score_Percentage?.replace('%','')) || 0);
+        if (eocAndKhanScores.length > 0) {
+            student.latestScores.avgEocKhan = (eocAndKhanScores.reduce((s,v)=>s+v,0) / eocAndKhanScores.length).toFixed(0);
+        }
+
+        // Populate cbPracticeTests
+        student.cbPracticeTests = studentAggregatedAssessments.filter(a => a.AssessmentSource.includes('CB Test') || a.AssessmentSource.includes('CB Module'))
+            .map(a => ({
+                name: a.AssessmentName,
+                date: a.AttemptDate,
+                rw: a.ScaledScore_RW || a.Score_Raw_Combined, // Use scaled if available, else raw
+                math: a.ScaledScore_Math || a.Score_Raw_Combined,
+                total: a.Score_Scaled_Total || a.Score_Raw_Combined,
+                classAvgRW: "(N/A)", // Needs full class data
+                classAvgMath: "(N/A)",
+                classAvgTotal: "(N/A)"
+            }))
+            .sort((a,b) => new Date(a.date) - new Date(b.date)); // Sort by date ascending for trend
+        
+        // Populate eocQuizzes
+        student.eocQuizzes.reading = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Canvas EOC Practice' && a.AssessmentName.startsWith('R-EOC'))
+            .map(a => ({ name: a.AssessmentName, latestScore: a.Score_Percentage || `${a.Score_Raw_Combined}/${a.PointsPossible_Combined}`, date: a.AttemptDate, classAvg: "(N/A)" }));
+        student.eocQuizzes.writing = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Canvas EOC Practice' && a.AssessmentName.startsWith('W-EOC'))
+            .map(a => ({ name: a.AssessmentName, latestScore: a.Score_Percentage || `${a.Score_Raw_Combined}/${a.PointsPossible_Combined}`, date: a.AttemptDate, classAvg: "(N/A)" }));
+        student.eocQuizzes.math = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Canvas EOC Practice' && a.AssessmentName.startsWith('M-EOC'))
+            .map(a => ({ name: a.AssessmentName, latestScore: a.Score_Percentage || `${a.Score_Raw_Combined}/${a.PointsPossible_Combined}`, date: a.AttemptDate, classAvg: "(N/A)" }));
+
+        // Populate khanAcademy
+        student.khanAcademy.reading = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Khan Academy Practice' && a.AssessmentName.includes('Reading'))
+            .map(a => ({ name: a.AssessmentName, date: a.AttemptDate, score: a.Score_Percentage || `${a.Score_Raw_Combined}/${a.PointsPossible_Combined}`, pointsPossible: a.PointsPossible_Combined, classAvg: "(N/A)" }));
+        student.khanAcademy.writing = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Khan Academy Practice' && a.AssessmentName.includes('Writing'))
+            .map(a => ({ name: a.AssessmentName, date: a.AttemptDate, score: a.Score_Percentage || `${a.Score_Raw_Combined}/${a.PointsPossible_Combined}`, pointsPossible: a.PointsPossible_Combined, classAvg: "(N/A)" }));
+        student.khanAcademy.math = studentAggregatedAssessments.filter(a => a.AssessmentSource === 'Khan Academy Practice' && a.AssessmentName.includes('Math'))
+            .map(a => ({ name: a.AssessmentName, date: a.AttemptDate, score: a.Score_Percentage || `${a.Score_Raw_Combined}/${a.PointsPossible_Combined}`, pointsPossible: a.PointsPossible_Combined, classAvg: "(N/A)" }));
+
+        // Populate scoreTrend (uses CB Test data)
+        student.scoreTrend.labels = student.cbPracticeTests.map(t => t.name);
+        student.scoreTrend.studentScores = student.cbPracticeTests.map(t => parseFloat(t.total));
+        // Class average trend would need full class data
+
+        // Populate overallSkillPerformance (very basic for now, needs real skill aggregation)
+        // This section needs to map your SAT_Skill_Tag from QuestionDetails to categories and then calculate accuracy.
+        // For now, it will be hardcoded dummy or very basic aggregation.
+        const rSkills = questionDetailsData.filter(q => q.StudentGmailID === studentEmail && q.SAT_Skill_Tag.includes('Reading'));
+        const wSkills = questionDetailsData.filter(q => q.StudentGmailID === studentEmail && q.SAT_Skill_Tag.includes('Writing'));
+        const mSkills = questionDetailsData.filter(q => q.StudentGmailID === studentEmail && q.SAT_Skill_Tag.includes('Math'));
+        
+        student.overallSkillPerformance.studentAccuracy[0] = calculateAverageCorrectness(rSkills);
+        student.overallSkillPerformance.studentAccuracy[1] = calculateAverageCorrectness(wSkills);
+        student.overallSkillPerformance.studentAccuracy[2] = calculateAverageCorrectness(mSkills);
+
+        // You'll need to define eocChapters if populating from data later, or use dummy
+        student.cbSkills.reading = [ { name: "Reading Skills from Data", score: student.overallSkillPerformance.studentAccuracy[0], classAvg: "(N/A)" } ];
+        student.cbSkills.writing = [ { name: "Writing Skills from Data", score: student.overallSkillPerformance.studentAccuracy[1], classAvg: "(N/A)" } ];
+        student.cbSkills.math = [ { name: "Math Skills from Data", score: student.overallSkillPerformance.studentAccuracy[2], classAvg: "(N/A)" } ];
+
+        // Populate strengths/improvements based on skill scores (example)
+        const allStudentSkills = [
+            ...student.cbSkills.reading,
+            ...student.cbSkills.writing,
+            ...student.cbSkills.math
+        ].filter(s => s.score !== undefined && !isNaN(s.score));
+
+        student.strengths = allStudentSkills.filter(s => s.score >= 80).map(s => `${s.name} (${s.score}%)`);
+        student.improvements = allStudentSkills.filter(s => s.score < 60).map(s => `${s.name} (${s.score}%)`);
+
+        // You might need to update student.name from the raw Students_CanvasData or Student_Mapping
+        const studentMappingEntry = studentDetailsByGmail[studentEmail];
+        if(studentMappingEntry && studentMappingEntry.studentNameCanvas) {
+            student.name = studentMappingEntry.studentNameCanvas;
+        }
+    }
+
+    return student;
+}
+
+function calculateAverageCorrectness(questionItems) {
+    if (questionItems.length === 0) return 0;
+    const correctCount = questionItems.filter(q => q.IsCorrect === true || String(q.IsCorrect).toUpperCase() === 'TRUE').length;
+    return Math.round((correctCount / questionItems.length) * 100);
 }
 
 function populateOverviewSnapshot(studentData) {
