@@ -18,8 +18,8 @@
                 <h1 class="sathub-header-title text-xl md:text-2xl font-bold">Analytics Hub</h1>
             </div>
             <div class="flex items-center space-x-4">
-                <span id="dashboard-student-name" class="text-sm hidden sm:block">Welcome!</span> <!-- ID changed to match prototype -->
-                <button id="changeIdButton" class="text-sm text-f0f0f0 hover:text-white hidden">Change ID</button> <!-- Button to logout/change student -->
+                <span id="dashboard-student-name" class="text-sm hidden sm:block">Welcome!</span> 
+                <button id="changeIdButton" class="text-sm text-f0f0f0 hover:text-white hidden">Change ID</button> 
                 <button id="hamburgerButton" class="md:hidden text-f0f0f0 focus:outline-none">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
@@ -31,11 +31,11 @@
 
     <nav class="bg-white shadow-sm sticky top-0 z-50">
         <div class="container mx-auto hidden md:flex">
-            <button data-tab="overview" class="tab-button active py-3 px-4">Overview</button> <!-- data-main-tab changed to data-tab -->
-            <button data-tab="practice-tests" class="tab-button py-3 px-4">CB Non-Adaptive Tests</button> <!-- data-main-tab changed to data-tab -->
-            <button data-tab="reading" class="tab-button py-3 px-4">Reading</button> <!-- data-main-tab changed to data-tab -->
-            <button data-tab="writing" class="tab-button py-3 px-4">Writing & Language</button> <!-- data-main-tab changed to data-tab -->
-            <button data-tab="math" class="tab-button py-3 px-4">Math</button> <!-- data-main-tab changed to data-tab -->
+            <button data-tab="overview" class="tab-button active py-3 px-4">Overview</button> 
+            <button data-tab="practice-tests" class="tab-button py-3 px-4">CB Non-Adaptive Tests</button> 
+            <button data-tab="reading" class="tab-button py-3 px-4">Reading</button> 
+            <button data-tab="writing" class="tab-button py-3 px-4">Writing & Language</button> 
+            <button data-tab="math" class="tab-button py-3 px-4">Math</button> 
         </div>
         <div id="mobileMenu" class="hidden md:hidden absolute top-full left-0 right-0 bg-white shadow-xl z-40">
             <a href="#" data-tab="overview" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100">Overview</a>
@@ -43,17 +43,16 @@
             <a href="#" data-tab="reading" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100">Reading</a>
             <a href="#" data-tab="writing" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100">Writing & Language</a>
             <a href="#" data-tab="math" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100">Math</a>
-            <a href="#" id="mobileChangeIdLink" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100 hidden">Change ID</a> <!-- ID changed -->
+            <a href="#" id="mobileChangeIdLink" class="mobile-nav-link block py-3 px-4 text-gray-700 hover:bg-gray-100 hidden">Change ID</a> 
         </div>
     </nav>
 
     <main id="main-dashboard-content" class="container mx-auto p-4 md:p-6 hidden"> 
-        <div id="overview-content" class="tab-pane space-y-6"> <!-- ID changed to tab-pane -->
+        <div id="overview-content" class="tab-pane space-y-6"> 
             <section class="themed-card"> 
                 <div class="themed-card-title-strip">Performance Snapshot</div>
-                <div id="overview-cards-container" class="themed-card-body"> <!-- Outer container for cards -->
+                <div id="overview-cards-container" class="themed-card-body"> 
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
-                        <!-- Content dynamically generated here -->
                         <div class="score-card"> 
                             <h3 class="text-md font-medium text-gray-600">Latest Total Score</h3>
                             <p class="text-3xl font-bold score-value" id="latestTotalScore">- <span class="text-lg text-gray-500">/ 1600</span></p>
@@ -93,25 +92,25 @@
                 </div>
             </section>
             <section class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                <div class="themed-card"><div class="themed-card-title-strip">Identified Strengths</div><div class="themed-card-body"><ul id="strengths-list" class="list-disc list-inside space-y-1 text-gray-600"></ul></div></div> <!-- ID changed -->
-                <div class="themed-card"><div class="themed-card-title-strip">Areas for Improvement</div><div class="themed-card-body"><ul id="weaknesses-list" class="list-disc list-inside space-y-1 text-gray-600"></ul></div></div> <!-- ID changed -->
+                <div class="themed-card"><div class="themed-card-title-strip">Identified Strengths</div><div class="themed-card-body"><ul id="strengths-list" class="list-disc list-inside space-y-1 text-gray-600"></ul></div></div> 
+                <div class="themed-card"><div class="themed-card-title-strip">Areas for Improvement</div><div class="themed-card-body"><ul id="weaknesses-list" class="list-disc list-inside space-y-1 text-gray-600"></ul></div></div> 
                 <div class="themed-card"><div class="themed-card-title-strip">Time Spent (Portal Usage)</div><div class="themed-card-body" id="timeSpentOverview"><p class="text-gray-600">Your Avg: <span class="font-semibold">-</span></p><p class="text-gray-600">Class Avg: <span class="font-semibold">-</span></p></div></div>
             </section>
         </div>
 
-        <div id="practice-tests-content" class="tab-pane hidden"> <!-- ID changed to tab-pane -->
+        <div id="practice-tests-content" class="tab-pane hidden"> 
             <section class="themed-card">
                 <div class="themed-card-title-strip">CB Non-Adaptive Tests</div>
                 <div class="themed-card-body overflow-x-auto">
                     <table class="min-w-full table">
                         <thead><tr><th>Test Name</th><th>Date Attempted</th><th>R&W Score</th><th>Math Score</th><th>Total Score</th><th>Class Avg R&W</th><th>Class Avg Math</th><th>Class Avg Total</th></tr></thead>
-                        <tbody id="practiceTests-table-body"></tbody> <!-- ID changed -->
+                        <tbody id="practiceTests-table-body"></tbody> 
                     </table>
                 </div>
             </section>
         </div>
         
-        <div id="reading-content" class="tab-pane hidden space-y-6"> <!-- ID changed to tab-pane -->
+        <div id="reading-content" class="tab-pane hidden space-y-6"> 
             <div class="flex flex-wrap space-x-2 mb-4 border-b pb-2">
                 <button data-sub-tab="reading-eoc" class="sub-tab-button active">EOC Practice</button>
                 <button data-sub-tab="reading-khan" class="sub-tab-button">Khan Academy Practice</button>
@@ -139,7 +138,7 @@
             </div>
         </div>
 
-        <div id="writing-content" class="tab-pane hidden space-y-6"> <!-- ID changed to tab-pane -->
+        <div id="writing-content" class="tab-pane hidden space-y-6"> 
             <div class="flex flex-wrap space-x-2 mb-4 border-b pb-2">
                 <button data-sub-tab="writing-eoc" class="sub-tab-button active">EOC Practice</button>
                 <button data-sub-tab="writing-khan" class="sub-tab-button">Khan Academy Practice</button>
@@ -167,7 +166,7 @@
             </div>
         </div>
 
-        <div id="math-content" class="tab-pane hidden space-y-6"> <!-- ID changed to tab-pane -->
+        <div id="math-content" class="tab-pane hidden space-y-6"> 
             <div class="flex flex-wrap space-x-2 mb-4 border-b pb-2">
                 <button data-sub-tab="math-eoc" class="sub-tab-button active">EOC Practice</button>
                 <button data-sub-tab="math-khan" class="sub-tab-button">Khan Academy Practice</button>
@@ -225,11 +224,11 @@
             <div class="modal-header">
                 <h2 class="text-xl font-semibold">Welcome to Analytics Hub!</h2>
             </div>
-            <div id="student-id-input-container" class="modal-body-content space-y-4"> <!-- ID changed to match prototype -->
+            <div id="student-id-input-container" class="modal-body-content space-y-4"> 
                 <p class="text-gray-700">Please enter your registered Gmail ID to view your personalized dashboard:</p>
-                <input type="email" id="studentIdInput" placeholder="your.email@example.pk" class="w-full p-2 border border-gray-300 rounded-md"> <!-- ID changed -->
-                <p id="id-input-error" class="text-red-600 text-sm hidden">Invalid Email. Please try again.</p> <!-- ID changed -->
-                <button id="loadDataButton" class="sathub-accent-bg text-white px-4 py-2 rounded-md hover:opacity-90">View Dashboard</button> <!-- ID changed -->
+                <input type="email" id="studentIdInput" placeholder="your.email@example.pk" class="w-full p-2 border border-gray-300 rounded-md"> 
+                <p id="id-input-error" class="text-red-600 text-sm hidden">Invalid Email. Please try again.</p> 
+                <button id="loadDataButton" class="sathub-accent-bg text-white px-4 py-2 rounded-md hover:opacity-90">View Dashboard</button> 
             </div>
             <!-- Loading/Error messages (hidden by default) -->
             <div id="loading-message" class="text-center p-8 hidden text-slate-500"></div>
@@ -243,6 +242,6 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-    <script src="script.js" defer></script>
+    <script src="script.js"></script> <!-- Removed 'defer' attribute -->
 </body>
 </html>
