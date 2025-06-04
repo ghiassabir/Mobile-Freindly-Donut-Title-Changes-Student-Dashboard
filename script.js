@@ -12,7 +12,7 @@ let allMasterQuizData = []; // Stores ALL fetched data from DashboardFeed_Aggreg
 let allQuestionData = [];   // Stores ALL fetched data from DashboardFeed_QuestionDetails.csv
 let currentStudentData = {}; // Structured object for the currently logged-in student's dashboard display
 
-// --- DOM ELEMENTS (Global references, assigned in DOMContentLoaded) ---
+// --- DOM ELEMENTS (Global references, assigned in initDashboard) ---
 let studentIdInputContainerEl, studentIdInputEl, loadDataButtonEl, idInputErrorEl;
 let loadingMessageEl, errorMessageEl, noDataMessageEl, dashboardRootContainerEl;
 let dashboardStudentNameEl, changeIdButtonEl, retryIdButtonEl;
@@ -21,7 +21,7 @@ let strengthsListEl, weaknessesListEl, practiceTestsTableBodyEl;
 let currentYearEl; 
 let tabButtons, tabPanes;
 let hamburgerButton, mobileMenu, mobileChangeIdLink; 
-let modal, modalQuestionDetailsContainer; // References to detailModal elements
+let modal, modalQuestionDetailsContainer; 
 
 // --- Chart Instances (Global Scope, for destroying/re-creating charts) ---
 let scoreTrendChartInstance = null;
@@ -47,8 +47,8 @@ const icons = {
 function formatDate(dateString) { 
     if (!dateString || String(dateString).toLowerCase() === "n/a" || String(dateString).trim() === "") return "-"; 
     try {
-        const date = new Date(dateString + 'T00:00:00'); // Parse as local date
-        if (isNaN(date.getTime())) return dateString; // Return original if parsing fails (e.g., already formatted)
+        const date = new Date(dateString + 'T00:00:00'); 
+        if (isNaN(date.getTime())) return dateString; 
         const options = { year: 'numeric', month: 'short', day: 'numeric' };
         return date.toLocaleDateString('en-US', options); 
     } catch (e) {
@@ -65,7 +65,6 @@ function formatDate(dateString) {
 function calculateAverageCorrectness(questionItems) {
     if (questionItems.length === 0) return 0;
     const correctCount = questionItems.filter(q => String(q.IsCorrect).toUpperCase() === 'TRUE').length;
-    // Only count questions as 'attempted' if there's a non-empty StudentAnswer
     const attemptedCount = questionItems.filter(q => q.StudentAnswer && String(q.StudentAnswer).trim() !== '').length; 
     if (attemptedCount === 0) return 0; 
     return Math.round((correctCount / attemptedCount) * 100);
@@ -201,7 +200,7 @@ async function handleLogin() {
                              allQuestionData.some(row => row.StudentGmailID === studentEmail);
 
         if (studentExists) {
-            localStorage.setItem(LOCAL_STORAGE_STUDENT_ID_KEY, studentEmail);
+            localStorage.setItem(STUDENT_IDENTIFIER_KEY, studentEmail);
             document.getElementById('loginModal').style.display = 'none';
             dashboardRootContainerEl.classList.remove('hidden'); // Make dashboard visible
             updateHeaderDisplay(studentEmail, true); // Update header with student name
@@ -242,7 +241,7 @@ function updateHeaderDisplay(studentEmail, loggedIn) {
         const studentNamePart = studentEmail.split('@')[0].split('.')[0]; 
         dashboardStudentNameEl.textContent = `Welcome, ${studentNamePart.charAt(0).toUpperCase() + studentNamePart.slice(1)}!`;
         dashboardStudentNameEl.classList.remove('hidden');
-        if(changeIdButtonEl) changeIdButtonEl.classList.remove('hidden');
+        if(changeIdButtonEl) changeIdIdButtonEl.classList.remove('hidden'); // Fix: changed to changeIdButtonEl
         if(mobileChangeIdLink) mobileChangeIdLink.classList.remove('hidden');
     } else {
         dashboardStudentNameEl.textContent = `Welcome!`;
@@ -265,16 +264,15 @@ async function fetchCsvData(url) {
     return new Promise((resolve, reject) => {
         PapaParse.parse(url, {
             download: true,
-            header: true, // Treat first row as headers
+            header: true, 
             skipEmptyLines: true,
-            worker: true, // Use a web worker for parsing (can improve performance for large files)
+            worker: true, 
             complete: function(results) {
                 if (results.errors.length > 0) {
                     console.error(`PapaParse errors for ${url}:`, results.errors);
                     reject(new Error(`PapaParse errors: ${JSON.stringify(results.errors)}`));
                 }
                 console.log(`Fetched data from ${url}. Rows: ${results.data.length}`);
-                // Filter out rows where all values are empty (PapaParse might return some from trailing newlines)
                 const cleanedData = results.data.filter(row => Object.values(row).some(value => value !== null && String(value).trim() !== ''));
                 resolve(cleanedData);
             },
@@ -299,7 +297,7 @@ async function fetchCsvData(url) {
 function transformDataForDashboard(studentAggregatedAssessments, allAggregatedData, studentQuestionDetails, studentEmail) {
     const student = { 
         name: studentEmail, 
-        targetScore: 1400, // This could eventually come from a student profile API or another sheet
+        targetScore: 1400, 
         latestScores: { total: "-", rw: "-", math: "-", avgEocKhan: "-" },
         classAveragesGlobal: { total: "-", rw: "-", math: "-", avgEocKhan: "-" }, 
         scoreTrend: { labels: [], studentScores: [], classAvgScores: [] },
@@ -323,7 +321,6 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
 
 
     // --- Global Class Averages (Calculated from ALL data loaded via PapaParse) ---
-    // This aggregates across all students to provide class comparison data.
     const allCBTests = allAggregatedData.filter(a => a.AssessmentSource === 'Canvas CB Test' && a.Score_Scaled_Total !== '' && a.Score_Scaled_Total !== null);
     if(allCBTests.length > 0) {
         student.classAveragesGlobal.total = Math.round(allCBTests.reduce((sum, a) => sum + parseFloat(a.Score_Scaled_Total), 0) / allCBTests.length);
@@ -363,7 +360,6 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
     ).map(a => ({
         name: a.AssessmentName,
         date: a.AttemptDate,
-        // Prioritize scaled scores for tests, raw scores for modules, else '-'
         rw: a.ScaledScore_RW || (a.AssessmentSource.includes('Module') ? a.Score_Raw_Combined : '-'), 
         math: a.ScaledScore_Math || (a.AssessmentSource.includes('Module') ? a.Score_Raw_Combined : '-'),
         total: a.Score_Scaled_Total || (a.AssessmentSource.includes('Module') ? a.Score_Raw_Combined : '-'),
@@ -626,7 +622,7 @@ function openModal(title, contentDetails) {
     
     modalQuestionDetailsContainer.innerHTML = ''; 
     
-    const studentEmail = localStorage.getItem(STUDENT_IDENTIFIER_KEY);
+    const studentEmail = localStorage.getItem(LOCAL_STORAGE_STUDENT_ID_KEY);
     const assessmentName = contentDetails.data.name;
 
     const assessmentQuestions = allQuestionDetailsData.filter(q => 
@@ -722,15 +718,18 @@ function closeModal() {
     if (modalLineChartInstance) modalLineChartInstance.destroy(); 
 }
 
+// Global modal window close handler
 window.onclick = function(event) { 
     if (event.target == modal) closeModal(); 
 }
 
+
 // --- MAIN INITIALIZATION ENTRY POINT ---
 // This function will be called automatically when the DOM is ready.
-// It initializes all global DOM element references and sets up event listeners.
+// It assigns all global DOM element references and sets up event listeners.
 // Then, it proceeds with the login check and data loading.
-document.addEventListener('DOMContentLoaded', () => {
+// The `defer` attribute is REMOVED from the script tag in index.html to ensure this runs immediately.
+(function initDashboard() { // Changed to a self-executing function to avoid DOMContentLoaded issues
     // Assign all global DOM element references here
     studentIdInputContainerEl = document.getElementById('student-id-input-container');
     studentIdInputEl = document.getElementById('studentIdInput');
@@ -762,8 +761,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if(currentYearEl) currentYearEl.textContent = new Date().getFullYear();
 
     // Setup event listeners for tabs and mobile nav
+    // This calls checkStudentLogin() to start the entire process.
     setupEventListeners(); 
 
-    // Kick off the login/data loading process
+    // Kick off the login/data loading process immediately after DOM elements are assigned
     checkStudentLogin(); 
-});
+})(); // Self-executing function
