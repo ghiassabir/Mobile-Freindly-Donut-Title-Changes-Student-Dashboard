@@ -1,16 +1,18 @@
 // --- CONFIGURATION ---
 // IMPORTANT: Replace these with the actual published URLs from your Google Sheet
-const AGGREGATED_SCORES_CSV_URL = 'YOUR_PUBLISHED_AGGREGATED_SCORES_CSV_URL_HERE'; 
-const QUESTION_DETAILS_CSV_URL = 'YOUR_PUBLISHED_QUESTION_DETAILS_CSV_URL_HERE'; 
-
-const STUDENT_IDENTIFIER_KEY = 'satHubStudentEmail'; // Key for local storage
+// These URLs should directly download the CSV file when pasted into a browser.
+const GOOGLE_SHEET_CSV_URLS = {
+    masterQuizData: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR22OeWtUj1ODFBbVBaiSfsp4anSLyfGk2r5JWKu-9TPwklSoiCk4Qste_zDMAsoTCpOPG7qGLj7wOc/pub?gid=671815293&single=true&output=csv', // From DashboardFeed_AggregatedScores sheet
+    questionData: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR22OeWtUj1ODFBbVBaiSfsp4anSLyfGk2r5JWKu-9TPwklSoiCk4Qste_zDMAsoTCpOPG7qGLj7wOc/pub?gid=171497066&single=true&output=csv'     // From DashboardFeed_QuestionDetails sheet
+};
+const LOCAL_STORAGE_STUDENT_ID_KEY = 'satHubStudentGmailId'; // Key for local storage
 
 // --- GLOBAL DATA (will be populated from CSVs) ---
-let allAggregatedData = []; // Stores ALL fetched aggregated data once
-let allQuestionData = [];   // Stores ALL fetched question details data once
-let currentStudentData = {}; // Structured object for the dashboard's display
+let allMasterQuizData = []; // Stores ALL fetched data from DashboardFeed_AggregatedScores.csv
+let allQuestionData = [];   // Stores ALL fetched data from DashboardFeed_QuestionDetails.csv
+let currentStudentData = {}; // Structured object for the currently logged-in student's dashboard display
 
-// --- DOM Elements (Declared globally, assigned in DOMContentLoaded) ---
+// --- DOM ELEMENTS (Global references, assigned in DOMContentLoaded) ---
 let studentIdInputContainerEl, studentIdInputEl, loadDataButtonEl, idInputErrorEl;
 let loadingMessageEl, errorMessageEl, noDataMessageEl, dashboardRootContainerEl;
 let dashboardStudentNameEl, changeIdButtonEl, retryIdButtonEl;
@@ -19,15 +21,15 @@ let strengthsListEl, weaknessesListEl, practiceTestsTableBodyEl;
 let currentYearEl; 
 let tabButtons, tabPanes;
 let hamburgerButton, mobileMenu, mobileChangeIdLink; 
-let modal, modalQuestionDetailsContainer; // Added modal elements globally
+let modal, modalQuestionDetailsContainer; // References to detailModal elements
 
-// --- Chart Instances (Global Scope) ---
+// --- Chart Instances (Global Scope, for destroying/re-creating charts) ---
 let scoreTrendChartInstance = null;
 let skillPerformanceChartInstance = null;
 let modalDonutChartInstance = null;
 let modalLineChartInstance = null;
 
-// --- ICON SVGs (Used directly in HTML or injected, defined here for consistency) ---
+// --- ICON SVGs (Used for dynamically injecting icons) ---
 const icons = {
     checkCircle: `<svg class="w-5 h-5 mr-2 inline text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`,
     xCircle: `<svg class="w-5 h-5 mr-2 inline text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`,
@@ -35,10 +37,18 @@ const icons = {
 
 
 // --- Helper Functions ---
+
+/**
+ * Formats a date string to a human-readable format (e.g., "Jan 1, 2024").
+ * Returns "-" if the input is null, N/A, or an invalid date.
+ * @param {string} dateString The date string to format (e.g., "YYYY-MM-DD").
+ * @returns {string} The formatted date or "-".
+ */
 function formatDate(dateString) { 
-    if (!dateString || String(dateString).toLowerCase() === "n/a" || String(dateString).trim() === "") return "-";
+    if (!dateString || String(dateString).toLowerCase() === "n/a" || String(dateString).trim() === "") return "-"; 
     try {
-        const date = new Date(dateString + 'T00:00:00'); 
+        const date = new Date(dateString + 'T00:00:00'); // Parse as local date
+        if (isNaN(date.getTime())) return dateString; // Return original if parsing fails (e.g., already formatted)
         const options = { year: 'numeric', month: 'short', day: 'numeric' };
         return date.toLocaleDateString('en-US', options); 
     } catch (e) {
@@ -47,14 +57,25 @@ function formatDate(dateString) {
     }
 }
 
+/**
+ * Calculates average correctness for a set of question items.
+ * @param {Array<Object>} questionItems Array of question objects (e.g., from allQuestionData).
+ * @returns {number} The calculated average accuracy percentage (0-100), or 0 if no attempted questions.
+ */
 function calculateAverageCorrectness(questionItems) {
     if (questionItems.length === 0) return 0;
     const correctCount = questionItems.filter(q => String(q.IsCorrect).toUpperCase() === 'TRUE').length;
+    // Only count questions as 'attempted' if there's a non-empty StudentAnswer
     const attemptedCount = questionItems.filter(q => q.StudentAnswer && String(q.StudentAnswer).trim() !== '').length; 
     if (attemptedCount === 0) return 0; 
     return Math.round((correctCount / attemptedCount) * 100);
 }
 
+/**
+ * Returns a CSS class name based on a score for performance visualization.
+ * @param {number} score The score percentage (0-100).
+ * @returns {string} CSS class (e.g., 'performance-good', 'performance-average', 'performance-poor').
+ */
 function getPerformanceClass(score) {
     if (score === null || isNaN(score)) return ''; 
     if (score >= 85) return 'performance-good';
@@ -64,6 +85,11 @@ function getPerformanceClass(score) {
 
 
 // --- UI Management Functions ---
+
+/**
+ * Displays a loading screen with a message, hiding other UI elements.
+ * @param {string} message The message to display on the loading screen.
+ */
 function showLoadingScreen(message = "Loading your personalized dashboard...") {
     if(loadingMessageEl) {
         loadingMessageEl.innerHTML = `<svg class="animate-spin h-8 w-8 text-sky-500 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ${message}`;
@@ -76,6 +102,10 @@ function showLoadingScreen(message = "Loading your personalized dashboard...") {
     if(noDataMessageEl) noDataMessageEl.classList.add('hidden');
 }
 
+/**
+ * Displays the student ID input screen, hiding other UI elements.
+ * @param {string} [errorMessage=""] An optional error message to display above the input.
+ */
 function showInputScreen(errorMessage = "") {
     if(studentIdInputContainerEl) studentIdInputContainerEl.classList.remove('hidden');
     // Hide other states
@@ -96,31 +126,39 @@ function showInputScreen(errorMessage = "") {
     }
 }
 
+/**
+ * Displays a general error message screen.
+ * @param {string} message The error message to display.
+ */
 function displayError(message) { 
     showLoadingScreen(); // Reset to loading, then show error
     if(errorMessageEl) {
         errorMessageEl.textContent = message;
         errorMessageEl.classList.remove('hidden');
     }
-    // Ensure dashboard content is hidden
     if(dashboardRootContainerEl) dashboardRootContainerEl.classList.add('hidden');
-    // Offer option to try again
     if(retryIdButtonEl) retryIdButtonEl.classList.remove('hidden');
 }
 
+/**
+ * Displays a "no data found" screen.
+ */
 function displayNoDataFoundScreen() {
     showLoadingScreen(); 
     if(noDataMessageEl) noDataMessageEl.classList.remove('hidden');
-    // Ensure dashboard content is hidden
     if(dashboardRootContainerEl) dashboardRootContainerEl.classList.add('hidden');
-    // Offer option to try again
     if(retryIdButtonEl) retryIdButtonEl.classList.remove('hidden');
 }
 
 
 // --- Login/Logout & Header Display Logic ---
+
+/**
+ * Checks for a saved student email in local storage and initiates login/display.
+ * Shows login modal if no email is found.
+ */
 function checkStudentLogin() {
-    const studentEmail = localStorage.getItem(STUDENT_IDENTIFIER_KEY);
+    const studentEmail = localStorage.getItem(LOCAL_STORAGE_STUDENT_ID_KEY);
     const loginModal = document.getElementById('loginModal');
     
     if (studentEmail) {
@@ -133,10 +171,14 @@ function checkStudentLogin() {
         dashboardRootContainerEl.classList.add('hidden'); // Ensure dashboard is hidden
         updateHeaderDisplay(null, false); // Clear header display
         if(studentIdInputEl) studentIdInputEl.value = ''; // Clear input field
-        document.getElementById('id-input-error').classList.add('hidden'); // Hide any error
+        document.getElementById('id-input-error').classList.add('hidden'); // Hide any previous error
     }
 }
 
+/**
+ * Handles the login attempt when the "View Dashboard" button is clicked.
+ * Fetches data and validates student email.
+ */
 async function handleLogin() {
     const studentEmail = studentIdInputEl.value.trim().toLowerCase();
     if (!studentEmail || !studentEmail.includes('@') || !studentEmail.includes('.')) {
@@ -151,15 +193,15 @@ async function handleLogin() {
     try {
         // Fetch all data from published Google Sheets once
         // These will be stored globally for later filtering per student
-        allMasterQuizData = await fetchCsvData(AGGREGATED_SCORES_CSV_URL);
-        allQuestionData = await fetchCsvData(QUESTION_DETAILS_CSV_URL);
+        allMasterQuizData = await fetchCsvData(GOOGLE_SHEET_CSV_URLS.masterQuizData);
+        allQuestionData = await fetchCsvData(GOOGLE_SHEET_CSV_URLS.questionData);
 
         // Validate if the entered student email exists in the fetched data
         const studentExists = allMasterQuizData.some(row => row.StudentGmailID === studentEmail) ||
                              allQuestionData.some(row => row.StudentGmailID === studentEmail);
 
         if (studentExists) {
-            localStorage.setItem(STUDENT_IDENTIFIER_KEY, studentEmail);
+            localStorage.setItem(LOCAL_STORAGE_STUDENT_ID_KEY, studentEmail);
             document.getElementById('loginModal').style.display = 'none';
             dashboardRootContainerEl.classList.remove('hidden'); // Make dashboard visible
             updateHeaderDisplay(studentEmail, true); // Update header with student name
@@ -182,11 +224,19 @@ async function handleLogin() {
     }
 }
 
+/**
+ * Clears saved student ID and reloads the page, showing the login modal.
+ */
 function handleLogout() {
-    localStorage.removeItem(STUDENT_IDENTIFIER_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_STUDENT_ID_KEY);
     window.location.reload(); // Reloads the page to reset state and show login modal
 }
 
+/**
+ * Updates the student name display and logout button visibility in the header.
+ * @param {string|null} studentEmail The email of the logged-in student, or null.
+ * @param {boolean} loggedIn True if a student is logged in, false otherwise.
+ */
 function updateHeaderDisplay(studentEmail, loggedIn) {
     if (loggedIn && studentEmail) {
         const studentNamePart = studentEmail.split('@')[0].split('.')[0]; 
@@ -204,20 +254,27 @@ function updateHeaderDisplay(studentEmail, loggedIn) {
 
 
 // --- DATA FETCHING (from Published Google Sheet CSVs) ---
+
+/**
+ * Fetches and parses CSV data from a given URL using PapaParse.
+ * @param {string} url The URL of the published CSV file.
+ * @returns {Promise<Array<Object>>} A promise that resolves with the parsed data.
+ */
 async function fetchCsvData(url) {
     console.log("Attempting to fetch data from:", url);
     return new Promise((resolve, reject) => {
         PapaParse.parse(url, {
             download: true,
-            header: true, 
+            header: true, // Treat first row as headers
             skipEmptyLines: true,
-            worker: true, 
+            worker: true, // Use a web worker for parsing (can improve performance for large files)
             complete: function(results) {
                 if (results.errors.length > 0) {
                     console.error(`PapaParse errors for ${url}:`, results.errors);
                     reject(new Error(`PapaParse errors: ${JSON.stringify(results.errors)}`));
                 }
                 console.log(`Fetched data from ${url}. Rows: ${results.data.length}`);
+                // Filter out rows where all values are empty (PapaParse might return some from trailing newlines)
                 const cleanedData = results.data.filter(row => Object.values(row).some(value => value !== null && String(value).trim() !== ''));
                 resolve(cleanedData);
             },
@@ -230,10 +287,19 @@ async function fetchCsvData(url) {
 }
 
 // --- DATA TRANSFORMATION (from flat CSV to dashboard's structured format) ---
+/**
+ * Transforms flat CSV data (aggregated assessments and question details)
+ * into the structured format expected by the dashboard's UI components.
+ * @param {Array<Object>} studentAggregatedAssessments Filtered aggregated data for the current student.
+ * @param {Array<Object>} allAggregatedData All aggregated data (for class averages).
+ * @param {Array<Object>} studentQuestionDetails Filtered question details for the current student.
+ * @param {string} studentEmail The email of the current student.
+ * @returns {Object} The structured student data for the dashboard.
+ */
 function transformDataForDashboard(studentAggregatedAssessments, allAggregatedData, studentQuestionDetails, studentEmail) {
     const student = { 
         name: studentEmail, 
-        targetScore: 1400, 
+        targetScore: 1400, // This could eventually come from a student profile API or another sheet
         latestScores: { total: "-", rw: "-", math: "-", avgEocKhan: "-" },
         classAveragesGlobal: { total: "-", rw: "-", math: "-", avgEocKhan: "-" }, 
         scoreTrend: { labels: [], studentScores: [], classAvgScores: [] },
@@ -257,6 +323,7 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
 
 
     // --- Global Class Averages (Calculated from ALL data loaded via PapaParse) ---
+    // This aggregates across all students to provide class comparison data.
     const allCBTests = allAggregatedData.filter(a => a.AssessmentSource === 'Canvas CB Test' && a.Score_Scaled_Total !== '' && a.Score_Scaled_Total !== null);
     if(allCBTests.length > 0) {
         student.classAveragesGlobal.total = Math.round(allCBTests.reduce((sum, a) => sum + parseFloat(a.Score_Scaled_Total), 0) / allCBTests.length);
@@ -296,6 +363,7 @@ function transformDataForDashboard(studentAggregatedAssessments, allAggregatedDa
     ).map(a => ({
         name: a.AssessmentName,
         date: a.AttemptDate,
+        // Prioritize scaled scores for tests, raw scores for modules, else '-'
         rw: a.ScaledScore_RW || (a.AssessmentSource.includes('Module') ? a.Score_Raw_Combined : '-'), 
         math: a.ScaledScore_Math || (a.AssessmentSource.includes('Module') ? a.Score_Raw_Combined : '-'),
         total: a.Score_Scaled_Total || (a.AssessmentSource.includes('Module') ? a.Score_Raw_Combined : '-'),
@@ -523,13 +591,6 @@ function populateKhanSection(sectionKey, khanItems) {
     }
 }
 
-function getPerformanceClass(score) {
-    if (score === null || isNaN(score)) return ''; 
-    if (score >= 85) return 'performance-good';
-    if (score >= 70) return 'performance-average';
-    return 'performance-poor';
-}
-
 function populateCBSkills(sectionKey, skillsData) {
     const container = document.getElementById(`${sectionKey}-cb-skills-data`);
     if (!container) return;
@@ -661,15 +722,16 @@ function closeModal() {
     if (modalLineChartInstance) modalLineChartInstance.destroy(); 
 }
 
-// Global modal window close handler
 window.onclick = function(event) { 
     if (event.target == modal) closeModal(); 
 }
 
-
 // --- MAIN INITIALIZATION ENTRY POINT ---
+// This function will be called automatically when the DOM is ready.
+// It initializes all global DOM element references and sets up event listeners.
+// Then, it proceeds with the login check and data loading.
 document.addEventListener('DOMContentLoaded', () => {
-    // Assign global DOM elements once the DOM is fully loaded
+    // Assign all global DOM element references here
     studentIdInputContainerEl = document.getElementById('student-id-input-container');
     studentIdInputEl = document.getElementById('studentIdInput');
     loadDataButtonEl = document.getElementById('loadDataButton');
@@ -693,16 +755,15 @@ document.addEventListener('DOMContentLoaded', () => {
     hamburgerButton = document.getElementById('hamburgerButton');
     mobileMenu = document.getElementById('mobileMenu');
     mobileChangeIdLink = document.getElementById('mobileChangeIdLink');
-    modal = document.getElementById('detailModal'); // Assign global modal element
-    modalQuestionDetailsContainer = document.getElementById('modalQuestionDetails'); // Assign global modal Q&A container
-
+    modal = document.getElementById('detailModal'); 
+    modalQuestionDetailsContainer = document.getElementById('modalQuestionDetails'); 
 
     // Set current year in footer
     if(currentYearEl) currentYearEl.textContent = new Date().getFullYear();
 
     // Setup event listeners for tabs and mobile nav
-    // This calls checkStudentLogin() to start the entire process.
-    setupEventListeners(); // This now calls checkStudentLogin() internally on load
-});
+    setupEventListeners(); 
 
-// The actual call to start the process on DOMContentLoaded is handled by setupEventListeners() -> checkStudentLogin()
+    // Kick off the login/data loading process
+    checkStudentLogin(); 
+});
